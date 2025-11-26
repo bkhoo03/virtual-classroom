@@ -1,0 +1,696 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Light Theme Colors */
+  --color-background: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-surface-elevated: #ffffff;
+  --color-surface-dark: #e9ecef;
+  
+  /* Text Colors - WCAG AA compliant (4.5:1 minimum contrast) */
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #6c757d;
+  --color-text-tertiary: #adb5bd;
+  --color-text-inverse: #ffffff;
+  
+  /* Accent Colors (maintained from original) */
+  --color-primary: #5c0099;
+  --color-secondary: #c86bfa;
+  --color-accent: #fdc500;
+  --color-accent-light: #ffd500;
+  --color-highlight: #ffee32;
+  
+  /* Borders */
+  --color-border: #e9ecef;
+  --color-border-light: #f1f3f5;
+  --color-border-focus: #c86bfa;
+  
+  /* Interactive States */
+  --color-hover-bg: #f8f9fa;
+  --color-active-bg: #e9ecef;
+  --color-disabled-bg: #f1f3f5;
+  --color-disabled-text: #adb5bd;
+  
+  /* Semantic Colors */
+  --color-success: #28a745;
+  --color-success-bg: #d4edda;
+  --color-error: #dc3545;
+  --color-error-bg: #f8d7da;
+  --color-warning: #ffc107;
+  --color-warning-bg: #fff3cd;
+  --color-info: #17a2b8;
+  --color-info-bg: #d1ecf1;
+  
+  /* Typography */
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* Spacing */
+  --spacing-4: 4px;
+  --spacing-8: 8px;
+  --spacing-16: 16px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-48: 48px;
+  --spacing-64: 64px;
+  
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  
+  /* Light Theme Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.12);
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-large: 0 10px 25px rgba(0, 0, 0, 0.15);
+  
+  /* Transitions */
+  --transition-duration-200: 200ms;
+  --transition-duration-250: 250ms;
+  --transition-duration-300: 300ms;
+  
+  /* Backdrop Blur */
+  --backdrop-blur-glass: 10px;
+}
+
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+button, input, textarea, select {
+  font-family: inherit;
+}
+
+/* Enhanced focus indicators for accessibility (WCAG AA compliant) */
+/* 3px #FDC500 outline as per design requirements */
+*:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 0;
+  border-color: var(--color-border-focus);
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Skip to main content link for screen readers */
+.skip-to-main {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1em;
+  background-color: var(--color-primary);
+  color: white;
+  text-decoration: none;
+  border-radius: 0 0 0.5em 0;
+}
+
+.skip-to-main:focus {
+  left: 0;
+  top: 0;
+}
+
+/* Custom Easing Functions for Smoother Animations */
+:root {
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-smooth-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+}
+
+/* Performance optimizations for 60 FPS animations */
+.will-animate {
+  will-change: transform, opacity;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable specific animations that might cause discomfort */
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-slide-in,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-success-glow {
+    animation: none !important;
+  }
+
+  /* Keep transforms but remove transitions */
+  .transition-300,
+  .transition-panel-resize,
+  .transition-tab-switch,
+  .transition-content-fade {
+    transition: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  /* Increase border visibility */
+  button,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="tab"] {
+    border: 2px solid currentColor !important;
+  }
+
+  /* Ensure focus indicators are highly visible */
+  *:focus-visible {
+    outline: 4px solid #FDC500 !important;
+    outline-offset: 3px !important;
+  }
+
+  /* Increase text contrast */
+  body {
+    color: #000000;
+    background-color: #FFFFFF;
+  }
+
+  /* Remove subtle shadows and backgrounds */
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: 0 0 0 2px currentColor !important;
+  }
+
+  /* Ensure all interactive elements have clear borders */
+  .bg-white,
+  .bg-gray-50,
+  .bg-gray-100 {
+    border: 2px solid #000000 !important;
+  }
+
+  /* Make disabled states more obvious */
+  button:disabled,
+  input:disabled,
+  [aria-disabled="true"] {
+    opacity: 0.5 !important;
+    border-style: dashed !important;
+  }
+}
+
+/* Smooth transition utilities with 300ms duration */
+.transition-300 {
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-panel-resize {
+  transition-property: width;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-tab-switch {
+  transition-property: opacity;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-content-fade {
+  transition-property: opacity, transform;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animations */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateZ(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateZ(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes page-transition {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes success-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 238, 50, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px rgba(255, 238, 50, 0.6);
+  }
+}
+
+@keyframes error-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 34;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s var(--ease-smooth-out);
+}
+
+.animate-draw-line {
+  animation: draw-line 0.3s var(--ease-smooth) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s var(--ease-smooth);
+  transform: translateZ(0);
+}
+
+.animate-fade-out {
+  animation: fade-out 0.3s var(--ease-smooth);
+  transform: translateZ(0);
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s var(--ease-smooth-out);
+  transform: translateZ(0);
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s var(--ease-smooth-out);
+  transform: translateZ(0);
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s var(--ease-smooth-out);
+}
+
+.animate-fade-scale-in {
+  animation: fade-scale-in 0.3s var(--ease-smooth-out);
+}
+
+.animate-page-transition {
+  animation: page-transition 0.3s var(--ease-smooth-out);
+}
+
+.animate-success-glow {
+  animation: success-glow 0.6s ease-out;
+}
+
+.animate-error-shake {
+  animation: error-shake 0.5s ease-in-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-bounce {
+  animation: bounce 0.5s ease-in-out;
+}
+
+/* Smooth Transition Utilities */
+.transition-smooth {
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-smooth-in {
+  transition-timing-function: var(--ease-smooth-in);
+}
+
+.transition-smooth-out {
+  transition-timing-function: var(--ease-smooth-out);
+}
+
+/* Custom Slider Styles */
+input[type="range"].slider-vertical {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"].slider-vertical::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #5C0099, #C86BFA);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(92, 0, 153, 0.5);
+  transition: all 0.2s ease;
+}
+
+input[type="range"].slider-vertical::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(92, 0, 153, 0.7);
+}
+
+input[type="range"].slider-vertical::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #5C0099, #C86BFA);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(92, 0, 153, 0.5);
+  transition: all 0.2s ease;
+}
+
+input[type="range"].slider-vertical::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(92, 0, 153, 0.7);
+}
+
+input[type="range"].slider-vertical::-webkit-slider-runnable-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  height: 4px;
+}
+
+input[type="range"].slider-vertical::-moz-range-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  height: 4px;
+}
+
+/* React-PDF Viewer Styles */
+.react-pdf-viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+}
+
+.pdf-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-background);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pdf-navigation,
+.pdf-zoom,
+.pdf-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-controls button {
+  padding: 6px 12px;
+  background: #5c0099;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pdf-controls button:hover:not(:disabled) {
+  background: #c86bfa;
+  transform: scale(1.05);
+}
+
+.pdf-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-controls span {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pdf-container {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+  position: relative;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+  display: inline-block;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-loading,
+.pdf-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--color-text-primary);
+  font-size: 16px;
+  text-align: center;
+}
+
+.pdf-error {
+  color: var(--color-error);
+}
+
+/* SVG Annotation Layer */
+.svg-annotation-layer {
+  touch-action: none;
+  user-select: none;
+}
+
+/* React-PDF default styles override */
+.react-pdf__Document {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.react-pdf__Page {
+  position: relative;
+  background: white;
+}
+
+.react-pdf__Page__canvas {
+  display: block;
+  user-select: none;
+}
+
+.react-pdf__Page__textContent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1;
+}
+
+.react-pdf__Page__textContent span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.react-pdf__Page__annotations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
