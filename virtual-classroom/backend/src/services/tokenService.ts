@@ -2,6 +2,22 @@ import * as AgoraToken from 'agora-access-token';
 import * as crypto from 'crypto';
 import { config } from '../config/env.js';
 
+// In-memory cache for session -> whiteboard room mapping
+// This ensures all users in the same session join the same whiteboard room
+const sessionRoomCache = new Map<string, { roomUuid: string; createdAt: number }>();
+
+// Clean up old entries every hour
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  for (const [sessionId, data] of sessionRoomCache.entries()) {
+    if (now - data.createdAt > maxAge) {
+      sessionRoomCache.delete(sessionId);
+      console.log('Cleaned up old whiteboard room mapping for session:', sessionId);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 /**
  * Service for generating secure tokens for Agora services
  * API keys are never exposed to the frontend
@@ -294,51 +310,60 @@ export class TokenService {
     }
 
     try {
-      // Generate a deterministic room UUID from the session ID
-      let roomUuid = roomId;
-      
-      // Check if roomId is already a valid UUID format (32 hex chars)
+      // Check if roomId is already a valid Agora-generated UUID (32 hex chars)
       const isValidUuid = /^[a-f0-9]{32}$/i.test(roomId);
+      let roomUuid: string;
       
-      if (!isValidUuid) {
-        // Generate a deterministic UUID from the session ID
-        roomUuid = this.generateRoomUuid(roomId);
-        console.log('Generated room UUID for session:', roomId, '->', roomUuid);
+      if (isValidUuid) {
+        // Already a valid UUID, use it directly
+        roomUuid = roomId;
+      } else {
+        // This is a session ID, check if we already have a room for this session
+        const cached = sessionRoomCache.get(roomId);
+        
+        if (cached) {
+          // Use the existing room UUID for this session
+          roomUuid = cached.roomUuid;
+          console.log('Using cached room UUID for session:', roomId, '->', roomUuid);
+        } else {
+          // Create a new room for this session
+          const sdkToken = config.agoraWhiteboardSdkToken;
+          
+          const createResponse = await fetch('https://api.netless.link/v5/rooms', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'token': sdkToken,
+              'region': 'us-sv'
+            },
+            body: JSON.stringify({
+              isRecord: false,
+              limit: 0
+            })
+          });
+
+          if (!createResponse.ok) {
+            const errorText = await createResponse.text();
+            console.error('Failed to create whiteboard room:', createResponse.status, errorText);
+            throw new Error(`Failed to create whiteboard room: ${createResponse.status}`);
+          }
+
+          const roomData = await createResponse.json() as { uuid: string };
+          roomUuid = roomData.uuid;
+          
+          // Cache the room UUID for this session
+          sessionRoomCache.set(roomId, {
+            roomUuid: roomUuid,
+            createdAt: Date.now()
+          });
+          
+          console.log('Created and cached new whiteboard room for session:', roomId, '->', roomUuid);
+        }
       }
 
-      // Use the pre-generated SDK token from .env (NOT generated locally!)
+      // Use the pre-generated SDK token from .env
       const sdkToken = config.agoraWhiteboardSdkToken;
       console.log('Using pre-generated SDK token from Agora Console');
-      
-      // Try to create the room with the deterministic UUID
-      // This ensures all users in the same session join the same room
-      try {
-        const createResponse = await fetch('https://api.netless.link/v5/rooms', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'token': sdkToken,
-            'region': 'us-sv'
-          },
-          body: JSON.stringify({
-            uuid: roomUuid, // Use the deterministic UUID!
-            isRecord: false,
-            limit: 0
-          })
-        });
-
-        if (createResponse.ok) {
-          console.log('Created new whiteboard room:', roomUuid);
-        } else {
-          const errorText = await createResponse.text();
-          console.log('Room creation response:', createResponse.status, errorText);
-          // If room already exists (409 conflict), that's fine - we'll use the existing room
-          // This is expected when the second user joins the session
-        }
-      } catch (createError) {
-        console.log('Room creation failed, will try to generate token anyway:', createError);
-        // This is okay - the room might already exist
-      }
 
       // Generate room token using the Netless API
       const lifespan = 86400000; // 24 hours
