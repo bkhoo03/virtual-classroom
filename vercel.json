@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd virtual-classroom && npm install && npm run build",
+  "outputDirectory": "virtual-classroom/dist",
+  "installCommand": "cd virtual-classroom && npm install",
+  "framework": null
+}
