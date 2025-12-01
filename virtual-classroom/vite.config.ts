@@ -12,11 +12,15 @@ export default defineConfig({
       include: [/node_modules/],
       transformMixedEsModules: true,
     },
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   define: {
     'process.env': {},
     global: 'globalThis',
-    'require': 'undefined',
   },
   test: {
     globals: true,
