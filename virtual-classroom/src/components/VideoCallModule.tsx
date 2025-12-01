@@ -39,6 +39,7 @@ export default function VideoCallModule({
   const [remoteStreams, setRemoteStreams] = useState<Map<string, VideoStream>>(new Map());
   const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>('good');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasJoinedCall, setHasJoinedCall] = useState(false); // Track if user has actually joined
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -135,6 +136,8 @@ export default function VideoCallModule({
       try {
         const localVideoStream = await videoService.createLocalTracks();
         setLocalStream(localVideoStream);
+        setHasJoinedCall(true); // Mark as joined when tracks are created
+        console.log('✅ User has joined the call, hasJoinedCall=true');
         showToast('Video call connected successfully', 'success', 3000);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to access media devices';
@@ -155,24 +158,78 @@ export default function VideoCallModule({
       // Set up remote user handling
       const client = videoService.getClient();
       if (client) {
+        // Subscribe to existing remote users who are already in the channel
+        console.log('Checking for existing remote users...');
+        const existingUsers = client.remoteUsers;
+        console.log(`Found ${existingUsers.length} existing remote users`);
+        for (const user of existingUsers) {
+          if (user.hasVideo || user.hasAudio) {
+            console.log('Subscribing to existing user:', user.uid);
+            const remoteStream = await videoService.subscribeToRemoteUser(user.uid);
+            if (remoteStream) {
+              setRemoteStreams(prev => {
+                const newMap = new Map(prev);
+                newMap.set(String(user.uid), remoteStream);
+                return newMap;
+              });
+            }
+          }
+        }
+
         client.on('user-published', async (user, mediaType) => {
-          console.log('Remote user published:', user.uid, mediaType);
+          console.log(`📡 Remote user published ${mediaType}:`, user.uid);
           const remoteStream = await videoService.subscribeToRemoteUser(user.uid);
           if (remoteStream) {
             setRemoteStreams(prev => {
               const newMap = new Map(prev);
+              const existingStream = newMap.get(String(user.uid));
+              
+              // If user already exists, just update their tracks
+              if (existingStream) {
+                console.log(`🔄 Updating existing user ${user.uid} with new ${mediaType} track`);
+              } else {
+                console.log(`✅ Adding new user ${user.uid} to remote streams`);
+                showToast('Participant joined the call', 'info', 3000);
+              }
+              
               newMap.set(String(user.uid), remoteStream);
               return newMap;
             });
-            showToast('Participant joined the call', 'info', 3000);
           }
         });
 
-        client.on('user-unpublished', (user) => {
-          console.log('Remote user unpublished:', user.uid);
+        client.on('user-unpublished', (user, mediaType) => {
+          console.log(`📴 Remote user unpublished ${mediaType}:`, user.uid);
+          
+          // DON'T remove the user from remoteStreams when they unpublish
+          // They're just muting their mic or turning off their camera
+          // Only remove them when they actually leave (user-left event)
+          
+          // Update the stream to reflect the unpublished track
           setRemoteStreams(prev => {
             const newMap = new Map(prev);
-            newMap.delete(String(user.uid));
+            const existingStream = newMap.get(String(user.uid));
+            
+            if (existingStream) {
+              // Update the stream with current track states
+              const updatedStream = {
+                ...existingStream,
+                videoTrack: mediaType === 'video' ? null : existingStream.videoTrack,
+                audioTrack: mediaType === 'audio' ? null : existingStream.audioTrack
+              };
+              
+              // Only keep the user if they still have at least one track
+              // or if they're still in the channel (check remoteUsers)
+              const remoteUser = client.remoteUsers.find(u => u.uid === user.uid);
+              if (remoteUser) {
+                console.log(`🔄 User ${user.uid} still in channel, keeping in remote streams`);
+                newMap.set(String(user.uid), updatedStream);
+              } else {
+                console.log(`❌ User ${user.uid} not in channel, removing from remote streams`);
+                newMap.delete(String(user.uid));
+              }
+            }
+            
             return newMap;
           });
         });
@@ -261,9 +318,11 @@ export default function VideoCallModule({
 
   const handleToggleAudio = useCallback(async (muted: boolean) => {
     try {
+      console.log(`🎤 Toggling audio: ${muted ? 'MUTED' : 'UNMUTED'}`);
       await videoService.toggleAudio(muted);
       // Update local state after successful toggle
       setIsAudioMuted(muted);
+      console.log(`✅ Audio toggled successfully, isAudioMuted=${muted}`);
       // Notify parent of audio state change
       if (onAudioChange) {
         onAudioChange(muted);
@@ -276,9 +335,11 @@ export default function VideoCallModule({
 
   const handleToggleVideo = useCallback(async (enabled: boolean) => {
     try {
+      console.log(`📹 Toggling video: ${enabled ? 'ON' : 'OFF'}`);
       await videoService.toggleVideo(enabled);
       // Update local state after successful toggle
       setIsVideoEnabled(enabled);
+      console.log(`✅ Video toggled successfully, isVideoEnabled=${enabled}`);
       // Notify parent of video state change
       if (onVideoChange) {
         onVideoChange(!enabled);
@@ -321,6 +382,11 @@ export default function VideoCallModule({
       onVideoChange(!mediaState.videoEnabled);
     }
   }, [isInitialized, localStream]); // Only run when initialized and tracks are created
+
+  // Debug: Log hasJoinedCall state changes
+  useEffect(() => {
+    console.log(`🔄 hasJoinedCall changed to: ${hasJoinedCall}`);
+  }, [hasJoinedCall]);
 
   return (
     <>
@@ -385,9 +451,9 @@ export default function VideoCallModule({
           <div className={`relative bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl overflow-hidden border border-gray-200/50 shadow-lg transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
-            {userRole === 'tutee' && localStream ? (
+            {userRole === 'tutee' && hasJoinedCall ? (
               <VideoPlayer
-                videoTrack={localStream.videoTrack}
+                videoTrack={localStream?.videoTrack || null}
                 userName={userName}
                 isLocal={true}
                 connectionQuality={connectionQuality}
@@ -395,12 +461,18 @@ export default function VideoCallModule({
                 videoOff={!isVideoEnabled}
               />
             ) : remoteStreams.size > 0 && userRole === 'tutor' ? (
-              <VideoPlayer
-                videoTrack={Array.from(remoteStreams.values())[0].videoTrack}
-                userName="Tutee"
-                isLocal={false}
-                connectionQuality={connectionQuality}
-              />
+              (() => {
+                const remoteStream = Array.from(remoteStreams.values())[0];
+                return (
+                  <VideoPlayer
+                    videoTrack={remoteStream.videoTrack}
+                    userName="Tutee"
+                    isLocal={false}
+                    connectionQuality={connectionQuality}
+                    videoOff={!remoteStream.videoTrack}
+                  />
+                );
+              })()
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100 animate-fade-in">
                 <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center mb-3 shadow-lg animate-scale-in">
@@ -414,12 +486,14 @@ export default function VideoCallModule({
                 </p>
               </div>
             )}
-            {/* Glass overlay for user info */}
-            <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
-              <span className="text-white text-xs font-medium">👨‍🎓 Student</span>
-            </div>
-            {/* Glass overlay for connection quality */}
-            {userRole === 'tutee' && (
+            {/* Glass overlay for user info - only show when joined */}
+            {(userRole === 'tutee' && hasJoinedCall) || (userRole === 'tutor' && remoteStreams.size > 0) ? (
+              <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
+                <span className="text-white text-xs font-medium">👨‍🎓 Student</span>
+              </div>
+            ) : null}
+            {/* Glass overlay for connection quality - only show when joined */}
+            {userRole === 'tutee' && hasJoinedCall && (
               <div className="absolute top-3 right-3 glass-dark px-2.5 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
                 <ConnectionQualityIndicator quality={connectionQuality} showLabel={false} />
               </div>
@@ -430,9 +504,9 @@ export default function VideoCallModule({
           <div className={`relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl overflow-hidden border border-gray-200/50 shadow-lg transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
-            {userRole === 'tutor' && localStream ? (
+            {userRole === 'tutor' && hasJoinedCall ? (
               <VideoPlayer
-                videoTrack={localStream.videoTrack}
+                videoTrack={localStream?.videoTrack || null}
                 userName={userName}
                 isLocal={true}
                 connectionQuality={connectionQuality}
@@ -440,12 +514,18 @@ export default function VideoCallModule({
                 videoOff={!isVideoEnabled}
               />
             ) : remoteStreams.size > 0 && userRole === 'tutee' ? (
-              <VideoPlayer
-                videoTrack={Array.from(remoteStreams.values())[0].videoTrack}
-                userName="Tutor"
-                isLocal={false}
-                connectionQuality={connectionQuality}
-              />
+              (() => {
+                const remoteStream = Array.from(remoteStreams.values())[0];
+                return (
+                  <VideoPlayer
+                    videoTrack={remoteStream.videoTrack}
+                    userName="Tutor"
+                    isLocal={false}
+                    connectionQuality={connectionQuality}
+                    videoOff={!remoteStream.videoTrack}
+                  />
+                );
+              })()
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100 animate-fade-in">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-500 rounded-full flex items-center justify-center mb-3 shadow-lg animate-scale-in">
@@ -459,12 +539,14 @@ export default function VideoCallModule({
                 </p>
               </div>
             )}
-            {/* Glass overlay for user info */}
-            <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
-              <span className="text-white text-xs font-medium">👨‍🏫 Tutor</span>
-            </div>
-            {/* Glass overlay for connection quality */}
-            {userRole === 'tutor' && (
+            {/* Glass overlay for user info - only show when joined */}
+            {(userRole === 'tutor' && hasJoinedCall) || (userRole === 'tutee' && remoteStreams.size > 0) ? (
+              <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
+                <span className="text-white text-xs font-medium">👨‍🏫 Tutor</span>
+              </div>
+            ) : null}
+            {/* Glass overlay for connection quality - only show when joined */}
+            {userRole === 'tutor' && hasJoinedCall && (
               <div className="absolute top-3 right-3 glass-dark px-2.5 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
                 <ConnectionQualityIndicator quality={connectionQuality} showLabel={false} />
               </div>

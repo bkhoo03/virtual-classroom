@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Variables Check</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .var {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2a2a2a;
+            border-left: 3px solid #00ff00;
+        }
+        .missing {
+            border-left-color: #ff0000;
+            color: #ff6666;
+        }
+        h1 {
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <h1>Environment Variables Check</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        const vars = [
+            'VITE_AGORA_APP_ID',
+            'VITE_AGORA_WHITEBOARD_APP_ID',
+            'VITE_AGORA_WHITEBOARD_AK',
+            'VITE_AGORA_WHITEBOARD_SK',
+            'VITE_OPENAI_API_KEY',
+            'VITE_OPENAI_API_ENDPOINT',
+            'VITE_BACKEND_URL',
+            'VITE_SERPER_API_KEY',
+            'VITE_UNSPLASH_ACCESS_KEY',
+            'VITE_ENV'
+        ];
+        
+        const output = document.getElementById('output');
+        
+        vars.forEach(varName => {
+            const value = import.meta.env[varName];
+            const div = document.createElement('div');
+            div.className = value ? 'var' : 'var missing';
+            
+            if (value) {
+                // Mask sensitive values
+                const maskedValue = varName.includes('KEY') || varName.includes('SECRET') 
+                    ? value.substring(0, 10) + '...' 
+                    : value;
+                div.textContent = `✓ ${varName} = ${maskedValue}`;
+            } else {
+                div.textContent = `✗ ${varName} = MISSING`;
+            }
+            
+            output.appendChild(div);
+        });
+        
+        // Show all available env vars
+        const allEnv = document.createElement('div');
+        allEnv.className = 'var';
+        allEnv.innerHTML = '<h2>All Available Env Vars:</h2><pre>' + 
+            JSON.stringify(import.meta.env, null, 2) + '</pre>';
+        output.appendChild(allEnv);
+    </script>
+</body>
+</html>
