@@ -310,7 +310,8 @@ export class TokenService {
       const sdkToken = config.agoraWhiteboardSdkToken;
       console.log('Using pre-generated SDK token from Agora Console');
       
-      // Try to create the room first (it's okay if it already exists)
+      // Try to create the room with the deterministic UUID
+      // This ensures all users in the same session join the same room
       try {
         const createResponse = await fetch('https://api.netless.link/v5/rooms', {
           method: 'POST',
@@ -320,22 +321,23 @@ export class TokenService {
             'region': 'us-sv'
           },
           body: JSON.stringify({
+            uuid: roomUuid, // Use the deterministic UUID!
             isRecord: false,
             limit: 0
           })
         });
 
         if (createResponse.ok) {
-          const roomData = await createResponse.json() as { uuid: string };
-          roomUuid = roomData.uuid;
           console.log('Created new whiteboard room:', roomUuid);
         } else {
           const errorText = await createResponse.text();
           console.log('Room creation response:', createResponse.status, errorText);
-          // If room already exists or other error, continue with the UUID we have
+          // If room already exists (409 conflict), that's fine - we'll use the existing room
+          // This is expected when the second user joins the session
         }
       } catch (createError) {
         console.log('Room creation failed, will try to generate token anyway:', createError);
+        // This is okay - the room might already exist
       }
 
       // Generate room token using the Netless API
