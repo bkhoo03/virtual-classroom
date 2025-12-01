@@ -282,14 +282,14 @@ export class VideoCallService {
       // Ensure tracks are enabled by default
       if (audioTrack) {
         await audioTrack.setEnabled(true);
+        console.log('✅ Audio track created and enabled:', audioTrack.enabled, 'muted:', audioTrack.muted);
       }
       if (videoTrack) {
         await videoTrack.setEnabled(true);
+        console.log('✅ Video track created and enabled:', videoTrack.enabled, 'muted:', videoTrack.muted);
       }
       
       console.log('Successfully created audio and video tracks');
-      console.log('Audio track enabled:', audioTrack?.enabled);
-      console.log('Video track enabled:', videoTrack?.enabled);
     } catch (error: any) {
       console.error('Failed to create both tracks:', error);
       
