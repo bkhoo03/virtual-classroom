@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Middleware
-// CORS configuration with support for ngrok domains
+// CORS configuration with support for ngrok domains and Vercel
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -49,8 +49,23 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Reject other origins
-    callback(new Error('Not allowed by CORS'));
+    // Check if origin matches Vercel deployment patterns
+    const vercelPatterns = [
+      /^https:\/\/virtual-classroom-[a-z0-9-]+\.vercel\.app$/,
+      /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+    ];
+
+    const isVercelDomain = vercelPatterns.some(pattern => pattern.test(origin));
+    
+    if (isVercelDomain) {
+      return callback(null, true);
+    }
+
+    // Log rejected origin for debugging
+    console.log(`CORS rejected origin: ${origin}`);
+    
+    // Return false instead of error to avoid 500 status
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

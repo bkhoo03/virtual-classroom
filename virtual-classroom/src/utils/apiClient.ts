@@ -10,7 +10,10 @@ export const apiClient = axios.create({
   baseURL: BACKEND_URL,
   headers: {
     'Content-Type': 'application/json',
+    // Bypass ngrok browser warning
+    'ngrok-skip-browser-warning': 'true',
   },
+  withCredentials: true,
 });
 
 /**
