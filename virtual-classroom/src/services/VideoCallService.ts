@@ -475,6 +475,12 @@ export class VideoCallService {
         try {
           await this.client.subscribe(remoteUser, 'audio');
           console.log(`Subscribed to audio track for user ${uid}`);
+          
+          // IMPORTANT: Play the audio track immediately after subscribing
+          if (remoteUser.audioTrack) {
+            remoteUser.audioTrack.play();
+            console.log(`✅ Playing audio track for user ${uid}`);
+          }
         } catch (error) {
           console.error(`Failed to subscribe to audio for user ${uid}:`, error);
         }
