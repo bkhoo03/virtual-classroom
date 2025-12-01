@@ -108,6 +108,8 @@ export default function WhiteboardCanvas({
         className="absolute inset-0 w-full h-full bg-white"
         style={{
           touchAction: 'none', // Prevent default touch behaviors
+          willChange: 'transform', // Optimize for animations
+          transform: 'translateZ(0)', // Force GPU acceleration
         }}
       />
 

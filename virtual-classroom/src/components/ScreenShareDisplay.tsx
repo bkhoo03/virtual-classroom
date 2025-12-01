@@ -1,34 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
-import AnnotationLayer from './AnnotationLayer';
-import { useAnnotations } from '../hooks/useAnnotations';
 
 interface ScreenShareDisplayProps {
   screenTrack: ILocalVideoTrack | IRemoteVideoTrack | null;
   isLocal?: boolean;
-  enableAnnotations?: boolean;
 }
 
 export default function ScreenShareDisplay({
   screenTrack,
   isLocal = true,
-  enableAnnotations = false,
 }: ScreenShareDisplayProps) {
   const videoRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
-
-  // Annotation hook
-  const {
-    currentTool,
-    currentColor,
-    strokeWidth,
-    handleAnnotationStart,
-    handleAnnotationEnd,
-  } = useAnnotations({
-    enabled: enableAnnotations,
-  });
 
   useEffect(() => {
     if (!screenTrack || !videoRef.current) {
@@ -41,29 +25,6 @@ export default function ScreenShareDisplay({
       screenTrack.play(videoRef.current);
       setIsPlaying(true);
       console.log('Screen share track playing');
-
-      // Get video dimensions for annotation layer
-      const updateVideoSize = () => {
-        if (videoRef.current) {
-          const video = videoRef.current.querySelector('video');
-          if (video) {
-            setVideoSize({
-              width: video.videoWidth || video.clientWidth,
-              height: video.videoHeight || video.clientHeight,
-            });
-          }
-        }
-      };
-
-      // Update size after a short delay to ensure video is loaded
-      setTimeout(updateVideoSize, 500);
-      
-      // Also update on resize
-      window.addEventListener('resize', updateVideoSize);
-
-      return () => {
-        window.removeEventListener('resize', updateVideoSize);
-      };
     } catch (error) {
       console.error('Error playing screen share track:', error);
       setIsPlaying(false);
@@ -116,21 +77,6 @@ export default function ScreenShareDisplay({
           height: '100%',
         }}
       />
-
-      {/* Annotation Layer */}
-      {enableAnnotations && isPlaying && videoSize.width > 0 && (
-        <AnnotationLayer
-          width={videoSize.width}
-          height={videoSize.height}
-          isEnabled={enableAnnotations}
-          currentTool={currentTool}
-          currentColor={currentColor}
-          strokeWidth={strokeWidth}
-          onAnnotationStart={handleAnnotationStart}
-          onAnnotationEnd={handleAnnotationEnd}
-          className="absolute top-0 left-0"
-        />
-      )}
 
       {/* Status indicator */}
       {isPlaying && (

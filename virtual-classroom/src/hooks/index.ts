@@ -1,4 +1,3 @@
-export { useAnnotations } from './useAnnotations';
 export { useAIConversation } from './useAIConversation';
 export { useVideo } from './useVideo';
 export { useWhiteboard } from './useWhiteboard';

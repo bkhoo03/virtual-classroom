@@ -10,6 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ClassroomPage = lazy(() => import('./pages/ClassroomPage'));
+const LoadingStatesDemo = lazy(() => import('./components/LoadingStatesDemo'));
 
 // Loading fallback component with fade animation
 function PageLoader() {
@@ -24,8 +25,36 @@ function PageLoader() {
 }
 
 function App() {
+  // Check for critical environment variables
+  const missingEnvVars: string[] = [];
+  
+  if (!import.meta.env.VITE_AGORA_APP_ID) missingEnvVars.push('VITE_AGORA_APP_ID');
+  if (!import.meta.env.VITE_BACKEND_URL) missingEnvVars.push('VITE_BACKEND_URL');
+  
+  if (missingEnvVars.length > 0) {
+    console.error('Missing environment variables:', missingEnvVars);
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Configuration Error</h1>
+          <p className="text-gray-700 mb-4">
+            The application is missing required environment variables:
+          </p>
+          <ul className="list-disc list-inside text-gray-600 mb-4">
+            {missingEnvVars.map(varName => (
+              <li key={varName}>{varName}</li>
+            ))}
+          </ul>
+          <p className="text-sm text-gray-500">
+            Please configure these variables in your deployment settings.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <ErrorBoundary>
+    <ErrorBoundary component="App">
       {/* Skip to main content link for keyboard navigation */}
       <a href="#main-content" className="skip-to-main">
         Skip to main content
@@ -35,12 +64,23 @@ function App() {
           <AuthProvider>
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/login" element={<LoginPage />} />
+                <Route path="/login" element={
+                  <ErrorBoundary component="LoginPage">
+                    <LoginPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/demo/loading" element={
+                  <ErrorBoundary component="LoadingStatesDemo">
+                    <LoadingStatesDemo />
+                  </ErrorBoundary>
+                } />
                 <Route 
                   path="/" 
                   element={
                     <ProtectedRoute>
-                      <HomePage />
+                      <ErrorBoundary component="HomePage">
+                        <HomePage />
+                      </ErrorBoundary>
                     </ProtectedRoute>
                   } 
                 />
@@ -49,7 +89,7 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ClassroomProvider>
-                        <ErrorBoundary>
+                        <ErrorBoundary component="ClassroomPage">
                           <ClassroomPage />
                         </ErrorBoundary>
                       </ClassroomProvider>

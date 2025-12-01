@@ -5,6 +5,9 @@ import AIService from '../services/AIService';
 import type { AIMessage, AIError } from '../types/ai.types';
 import { useAIConversation } from '../hooks/useAIConversation';
 import { useToast } from '../contexts/ToastContext';
+import { aiContentBroadcaster } from '../services/AIContentBroadcaster';
+import { getTypographyClasses } from '../utils/designSystem';
+import { getPresentationModeManager } from '../services/PresentationModeManager';
 
 interface AIAssistantProps {
   sessionId?: string;
@@ -49,6 +52,18 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
       return;
     }
 
+    // Auto-switch to AI output mode when query is sent (only on first send, not retry)
+    if (!isRetry) {
+      try {
+        const modeManager = getPresentationModeManager();
+        await modeManager.autoSwitchToAIOutput();
+        console.log('[AIAssistant] Auto-switched to AI output mode');
+      } catch (err) {
+        console.error('[AIAssistant] Failed to auto-switch to AI output:', err);
+        // Don't block the message send if mode switch fails
+      }
+    }
+
     // Add user message (only if not a retry)
     if (!isRetry) {
       const userMessage: AIMessage = {
@@ -67,21 +82,71 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
       setIsRetrying(true);
     }
 
+    // Broadcast loading state to AI Output Panel
+    aiContentBroadcaster.setLoading(true);
+
     try {
       // Get conversation context (last 10 messages for context)
       const context = getContext(10);
       
-      // Send message to AI service with context
-      const response = await aiService.sendMessage([...context], {
+      console.log('🔍 Sending message with full multimodal support (web search, image search, image generation)...');
+      
+      // Send message to AI service with context, including all multimodal features
+      const result = await aiService.sendFullMultimodalMessage([...context], {
         temperature: 0.7,
         maxTokens: 2000,
+        enableProactiveImages: true, // Enable proactive image enhancement
+        preferUnsplash: true, // Prefer Unsplash over DALL-E for cost savings
       });
       
-      // Add AI response
+      console.log('📸 Multimodal result:', {
+        images: result.images ? `Found ${result.images.length} Unsplash images` : 'No Unsplash images',
+        generatedImages: result.generatedImages ? `Generated ${result.generatedImages.length} DALL-E images` : 'No generated images',
+        searchResults: result.searchResults ? `Found ${result.searchResults.length} search results` : 'No search results',
+      });
+      
+      // Combine Unsplash images and generated images
+      const allImages = [
+        ...(result.images || []),
+        ...(result.generatedImages || []),
+      ];
+      
+      // Broadcast multimodal content to AI Output Panel
+      console.log('🎯 Broadcasting to AI Output Panel:', {
+        hasImages: allImages.length > 0,
+        hasSearchResults: result.searchResults && result.searchResults.length > 0,
+        imageCount: allImages.length,
+        searchResultCount: result.searchResults?.length || 0,
+      });
+      
+      if (allImages.length > 0 || (result.searchResults && result.searchResults.length > 0)) {
+        console.log('✅ Broadcasting multimodal content to AI Output Panel');
+        aiContentBroadcaster.broadcast({
+          id: `ai-content-${Date.now()}`,
+          userQuery: content,
+          textResponse: result.response.choices[0]?.message?.content || '',
+          images: allImages,
+          searchResults: result.searchResults || [],
+          timestamp: new Date(),
+          cost: {
+            text: (result.response.usage.total_tokens / 1000) * 0.002,
+            images: (result.generatedImages?.length || 0) * 0.02,
+            search: (result.searchResults?.length || 0) * 0.001,
+            total: ((result.response.usage.total_tokens / 1000) * 0.002) + 
+                   ((result.generatedImages?.length || 0) * 0.02) + 
+                   ((result.searchResults?.length || 0) * 0.001),
+          },
+          imageSource: result.images && result.images.length > 0 
+            ? (result.generatedImages && result.generatedImages.length > 0 ? 'both' : 'unsplash')
+            : (result.generatedImages && result.generatedImages.length > 0 ? 'dalle' : 'none'),
+        });
+      }
+      
+      // Add AI response (without inline images)
       const aiMessage: AIMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
-        content: response.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
+        content: result.response.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
         timestamp: new Date(),
       };
 
@@ -135,41 +200,44 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
     } finally {
       setIsLoading(false);
       setIsRetrying(false);
+      // Broadcast loading complete to AI Output Panel
+      aiContentBroadcaster.setLoading(false);
     }
   }, [aiService, addMessage, getContext, retryCount, showToast]);
 
   return (
-    <div className="bg-transparent h-full flex flex-col">
-      {/* Header - removed as it's now in ClassroomLayout */}
+    <>
+      <div className="bg-transparent h-full flex flex-col">
+        {/* Header - removed as it's now in ClassroomLayout */}
 
-      {/* AI Disabled Message */}
-      {!enableAI && (
-        <div className="mb-3 p-4 bg-gray-500/10 border border-gray-500/30 rounded-lg flex items-start gap-3">
+        {/* AI Disabled Message */}
+        {!enableAI && (
+        <div className="mb-4 p-4 bg-gray-500/10 border border-gray-500/30 rounded-lg flex items-start gap-3 transition-all duration-300">
           <svg className="w-6 h-6 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div className="flex-1">
-            <p className="text-gray-300 text-sm font-medium">AI Assistant Disabled</p>
-            <p className="text-gray-400 text-xs mt-1">The AI assistant feature is currently disabled for this session.</p>
+            <p className={`${getTypographyClasses('sm', 'medium')} text-gray-300`}>AI Assistant Disabled</p>
+            <p className={`${getTypographyClasses('xs', 'normal')} text-gray-400 mt-1`}>The AI assistant feature is currently disabled for this session.</p>
           </div>
         </div>
       )}
 
       {/* Error notification */}
       {error && (
-        <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-2">
+        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3 transition-all duration-300 shadow-sm">
           <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div className="flex-1">
-            <p className="text-red-300 text-sm">{error}</p>
+            <p className={`${getTypographyClasses('sm', 'normal')} text-red-300`}>{error}</p>
             {isRetrying && (
-              <p className="text-red-400 text-xs mt-1">Retrying...</p>
+              <p className={`${getTypographyClasses('xs', 'normal')} text-red-400 mt-1`}>Retrying...</p>
             )}
           </div>
           <button
             onClick={() => setError(null)}
-            className="text-red-400 hover:text-red-300 transition-colors"
+            className="text-red-400 hover:text-red-300 transition-colors duration-150 p-1 rounded hover:bg-red-500/10"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -183,11 +251,11 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
         const status = aiService.getRateLimitStatus();
         if (status.requestsRemaining <= 3 && status.requestsRemaining > 0) {
           return (
-            <div className="mb-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg flex items-start gap-2">
-              <svg className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mb-4 p-4 bg-[#FFEE32]/10 border border-[#FFD500]/30 rounded-lg flex items-start gap-3 transition-all duration-300 shadow-sm">
+              <svg className="w-5 h-5 text-[#FDC500] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <p className="text-orange-300 text-sm">
+              <p className={`${getTypographyClasses('sm', 'normal')} text-gray-700`}>
                 {status.requestsRemaining} requests remaining. Rate limit resets soon.
               </p>
             </div>
@@ -214,7 +282,7 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
               setIsLoading(false);
               setError('Request cancelled by user');
             }}
-            className="px-4 py-2 bg-red-500 rounded-lg flex items-center gap-2 text-white text-sm font-medium hover:bg-red-600 transition-all duration-300"
+            className="px-4 py-2 bg-red-500 rounded-lg flex items-center gap-2 text-white text-sm font-medium hover:bg-red-600 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
             aria-label="Cancel"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,6 +305,7 @@ export default function AIAssistant({ sessionId, onMediaShare, enableAI = true }
           showAskAI={enableAI && !!aiService}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

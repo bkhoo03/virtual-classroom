@@ -260,24 +260,37 @@ export default function VideoCallModule({
   }, [isInitialized, videoService, onConnectionChange, showToast]);
 
   const handleToggleAudio = useCallback(async (muted: boolean) => {
-    setIsAudioMuted(muted);
-    await videoService.toggleAudio(muted);
-    // Notify parent of audio state change
-    if (onAudioChange) {
-      onAudioChange(muted);
+    try {
+      await videoService.toggleAudio(muted);
+      // Update local state after successful toggle
+      setIsAudioMuted(muted);
+      // Notify parent of audio state change
+      if (onAudioChange) {
+        onAudioChange(muted);
+      }
+    } catch (error) {
+      console.error('Failed to toggle audio:', error);
+      showToast('Failed to toggle microphone', 'error');
     }
-  }, [videoService, onAudioChange]);
+  }, [videoService, onAudioChange, showToast]);
 
   const handleToggleVideo = useCallback(async (enabled: boolean) => {
-    setIsVideoEnabled(enabled);
-    await videoService.toggleVideo(enabled);
-    // Notify parent of video state change
-    if (onVideoChange) {
-      onVideoChange(!enabled);
+    try {
+      await videoService.toggleVideo(enabled);
+      // Update local state after successful toggle
+      setIsVideoEnabled(enabled);
+      // Notify parent of video state change
+      if (onVideoChange) {
+        onVideoChange(!enabled);
+      }
+    } catch (error) {
+      console.error('Failed to toggle video:', error);
+      showToast('Failed to toggle camera', 'error');
     }
-  }, [videoService, onVideoChange]);
+  }, [videoService, onVideoChange, showToast]);
 
   // Sync with external control changes (from toolbar)
+  // Only update if the external state differs from current state
   useEffect(() => {
     if (externalAudioMuted !== undefined && externalAudioMuted !== isAudioMuted) {
       handleToggleAudio(externalAudioMuted);
@@ -289,6 +302,25 @@ export default function VideoCallModule({
       handleToggleVideo(!externalVideoOff);
     }
   }, [externalVideoOff, isVideoEnabled, handleToggleVideo]);
+
+  // Sync initial state after tracks are created
+  useEffect(() => {
+    if (!isInitialized || !localStream) return;
+
+    // Only sync once when tracks are first created
+    const mediaState = videoService.getMediaState();
+    console.log('Initial media state sync:', mediaState);
+    
+    setIsAudioMuted(mediaState.audioMuted);
+    setIsVideoEnabled(mediaState.videoEnabled);
+    
+    if (onAudioChange) {
+      onAudioChange(mediaState.audioMuted);
+    }
+    if (onVideoChange) {
+      onVideoChange(!mediaState.videoEnabled);
+    }
+  }, [isInitialized, localStream]); // Only run when initialized and tracks are created
 
   return (
     <>
@@ -349,8 +381,8 @@ export default function VideoCallModule({
         <div className={`flex-1 flex gap-4 p-4 overflow-hidden transition-all duration-500 ${isChatCollapsed ? 'flex-col' : 'flex-row'}`}
           style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
         >
-          {/* Tutee Video - Light theme styling */}
-          <div className={`relative bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl overflow-hidden border border-gray-200 shadow-sm transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
+          {/* Tutee Video - Modern glass styling */}
+          <div className={`relative bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl overflow-hidden border border-gray-200/50 shadow-lg transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
             {userRole === 'tutee' && localStream ? (
@@ -370,8 +402,8 @@ export default function VideoCallModule({
                 connectionQuality={connectionQuality}
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
-                <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center mb-3 shadow-md">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100 animate-fade-in">
+                <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center mb-3 shadow-lg animate-scale-in">
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -382,18 +414,20 @@ export default function VideoCallModule({
                 </p>
               </div>
             )}
-            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1.5 rounded-lg shadow-sm border border-gray-200">
-              <span className="text-gray-700 text-xs font-medium">👨‍🎓 Student</span>
+            {/* Glass overlay for user info */}
+            <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
+              <span className="text-white text-xs font-medium">👨‍🎓 Student</span>
             </div>
+            {/* Glass overlay for connection quality */}
             {userRole === 'tutee' && (
-              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1.5 rounded-lg shadow-sm border border-gray-200">
+              <div className="absolute top-3 right-3 glass-dark px-2.5 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
                 <ConnectionQualityIndicator quality={connectionQuality} showLabel={false} />
               </div>
             )}
           </div>
 
-          {/* Tutor Video - Light theme styling */}
-          <div className={`relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl overflow-hidden border border-gray-200 shadow-sm transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
+          {/* Tutor Video - Modern glass styling */}
+          <div className={`relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl overflow-hidden border border-gray-200/50 shadow-lg transition-all duration-500 ${isChatCollapsed ? 'flex-1 min-h-[200px]' : 'flex-1'}`}
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
             {userRole === 'tutor' && localStream ? (
@@ -413,8 +447,8 @@ export default function VideoCallModule({
                 connectionQuality={connectionQuality}
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-500 rounded-full flex items-center justify-center mb-3 shadow-md">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100 animate-fade-in">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-500 rounded-full flex items-center justify-center mb-3 shadow-lg animate-scale-in">
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -425,11 +459,13 @@ export default function VideoCallModule({
                 </p>
               </div>
             )}
-            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1.5 rounded-lg shadow-sm border border-gray-200">
-              <span className="text-gray-700 text-xs font-medium">👨‍🏫 Tutor</span>
+            {/* Glass overlay for user info */}
+            <div className="absolute top-3 left-3 glass-dark px-3 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
+              <span className="text-white text-xs font-medium">👨‍🏫 Tutor</span>
             </div>
+            {/* Glass overlay for connection quality */}
             {userRole === 'tutor' && (
-              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1.5 rounded-lg shadow-sm border border-gray-200">
+              <div className="absolute top-3 right-3 glass-dark px-2.5 py-2 rounded-xl shadow-lg border border-white/10 animate-fade-in">
                 <ConnectionQualityIndicator quality={connectionQuality} showLabel={false} />
               </div>
             )}

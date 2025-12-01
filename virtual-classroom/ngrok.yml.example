@@ -1,0 +1,30 @@
+# Ngrok Configuration File Example
+# Copy this file to ~/.ngrok2/ngrok.yml and add your authtoken
+# Then you can start both tunnels with: ngrok start --all
+
+version: "2"
+authtoken: YOUR_AUTH_TOKEN_HERE
+
+tunnels:
+  backend:
+    proto: http
+    addr: 3001
+    region: us
+    # Uncomment for custom subdomain (paid feature)
+    # subdomain: my-classroom-backend
+    
+  frontend:
+    proto: http
+    addr: 5173
+    region: us
+    # Uncomment for custom subdomain (paid feature)
+    # subdomain: my-classroom-frontend
+
+# Usage:
+# 1. Get your authtoken from https://dashboard.ngrok.com/
+# 2. Replace YOUR_AUTH_TOKEN_HERE with your actual token
+# 3. Copy this file to ~/.ngrok2/ngrok.yml
+# 4. Start both tunnels: ngrok start --all
+#
+# This will start both backend and frontend tunnels simultaneously.
+# You'll see both URLs in the ngrok dashboard.

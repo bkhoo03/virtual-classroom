@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+@import "./utils/AIAnimationController.css";
 
 @theme {
   /* Light Theme Colors */
@@ -14,9 +15,42 @@
   --color-text-tertiary: #adb5bd;
   --color-text-inverse: #ffffff;
   
-  /* Accent Colors (maintained from original) */
-  --color-primary: #5c0099;
-  --color-secondary: #c86bfa;
+  /* Yellow Color Palette (Primary Brand Color) */
+  --color-yellow-50: #fffef7;
+  --color-yellow-100: #fffbeb;
+  --color-yellow-200: #fff4c7;
+  --color-yellow-300: #ffee32;
+  --color-yellow-400: #ffe500;
+  --color-yellow-500: #fdc500;
+  --color-yellow-600: #e6a800;
+  --color-yellow-700: #b38600;
+  --color-yellow-800: #806000;
+  --color-yellow-900: #4d3900;
+  
+  /* Purple Color Palette (Accent Brand Color) */
+  --color-purple-50: #faf5ff;
+  --color-purple-100: #f3e8ff;
+  --color-purple-200: #e9d5ff;
+  --color-purple-300: #d8b4fe;
+  --color-purple-400: #c86bfa;
+  --color-purple-500: #a855f7;
+  --color-purple-600: #9333ea;
+  --color-purple-700: #7e22ce;
+  --color-purple-800: #6b21a8;
+  --color-purple-900: #5c0099;
+  
+  /* Primary and Secondary Color Aliases */
+  --color-primary: var(--color-yellow-500);
+  --color-primary-hover: var(--color-yellow-600);
+  --color-primary-light: var(--color-yellow-300);
+  --color-primary-dark: var(--color-yellow-700);
+  
+  --color-secondary: var(--color-purple-900);
+  --color-secondary-hover: var(--color-purple-800);
+  --color-secondary-light: var(--color-purple-400);
+  --color-secondary-dark: var(--color-purple-900);
+  
+  /* Legacy Accent Colors (maintained for backward compatibility) */
   --color-accent: #fdc500;
   --color-accent-light: #ffd500;
   --color-highlight: #ffee32;
@@ -90,6 +124,93 @@
   
   /* Backdrop Blur */
   --backdrop-blur-glass: 10px;
+  --backdrop-blur-glass-subtle: 6px;
+  --backdrop-blur-glass-strong: 16px;
+  
+  /* Glass-morphism Colors */
+  --glass-bg-base: rgba(255, 255, 255, 0.1);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.05);
+  --glass-bg-strong: rgba(255, 255, 255, 0.2);
+  --glass-bg-dark: rgba(0, 0, 0, 0.3);
+  --glass-bg-yellow: rgba(253, 197, 0, 0.15);
+  --glass-bg-purple: rgba(92, 0, 153, 0.15);
+  
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-border-subtle: rgba(255, 255, 255, 0.1);
+  --glass-border-strong: rgba(255, 255, 255, 0.3);
+}
+
+/* Glass-morphism Utility Classes */
+.glass {
+  background: var(--glass-bg-base);
+  backdrop-filter: blur(var(--backdrop-blur-glass));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+}
+
+.glass-subtle {
+  background: var(--glass-bg-subtle);
+  backdrop-filter: blur(var(--backdrop-blur-glass-subtle));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass-subtle));
+  border: 1px solid var(--glass-border-subtle);
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--backdrop-blur-glass-strong));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass-strong));
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.15);
+}
+
+.glass-dark {
+  background: var(--glass-bg-dark);
+  backdrop-filter: blur(var(--backdrop-blur-glass));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass));
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.glass-yellow {
+  background: var(--glass-bg-yellow);
+  backdrop-filter: blur(var(--backdrop-blur-glass));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass));
+  border: 1px solid rgba(253, 197, 0, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(253, 197, 0, 0.1);
+}
+
+.glass-purple {
+  background: var(--glass-bg-purple);
+  backdrop-filter: blur(var(--backdrop-blur-glass));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur-glass));
+  border: 1px solid rgba(92, 0, 153, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(92, 0, 153, 0.1);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .glass,
+  .glass-subtle,
+  .glass-strong,
+  .glass-dark,
+  .glass-yellow,
+  .glass-purple {
+    background: rgba(255, 255, 255, 0.95);
+  }
+  
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.85);
+  }
+  
+  .glass-yellow {
+    background: rgba(253, 197, 0, 0.9);
+  }
+  
+  .glass-purple {
+    background: rgba(92, 0, 153, 0.9);
+  }
 }
 
 * {
@@ -117,10 +238,13 @@ button, input, textarea, select {
 }
 
 /* Enhanced focus indicators for accessibility (WCAG AA compliant) */
-/* 3px #FDC500 outline as per design requirements */
+/* Yellow glow focus indicators with smooth transitions */
 *:focus-visible {
   outline: 3px solid #FDC500;
   outline-offset: 2px;
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 button:focus-visible,
@@ -129,7 +253,12 @@ a:focus-visible,
 [role="tab"]:focus-visible {
   outline: 3px solid #FDC500;
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15);
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 20px rgba(253, 197, 0, 0.4);
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 input:focus-visible,
@@ -138,6 +267,65 @@ select:focus-visible {
   outline: 3px solid #FDC500;
   outline-offset: 0;
   border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 15px rgba(253, 197, 0, 0.3);
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Additional focus styles for specific interactive elements */
+[role="menuitem"]:focus-visible,
+[role="option"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="slider"]:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 20px rgba(253, 197, 0, 0.4);
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus styles for custom components */
+.focusable:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 20px rgba(253, 197, 0, 0.4);
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced focus for icon buttons and toolbar buttons */
+.btn-toolbar:focus-visible,
+.icon-button:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 25px rgba(253, 197, 0, 0.5);
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus ring utility class for custom components */
+.focus-ring {
+  transition: outline-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              outline-offset 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.focus-ring:focus-visible {
+  outline: 3px solid #FDC500;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.15),
+              0 0 20px rgba(253, 197, 0, 0.4);
 }
 
 /* Screen reader only content */
@@ -219,6 +407,24 @@ select:focus-visible {
   .transition-content-fade {
     transition: none !important;
   }
+
+  /* Keep focus indicators visible but remove transitions */
+  *:focus-visible,
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [role="tab"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [role="option"]:focus-visible,
+  .focusable:focus-visible,
+  .focus-ring:focus-visible,
+  .btn-toolbar:focus-visible,
+  .icon-button:focus-visible {
+    transition: none !important;
+  }
 }
 
 /* High contrast mode support */
@@ -233,10 +439,12 @@ select:focus-visible {
     border: 2px solid currentColor !important;
   }
 
-  /* Ensure focus indicators are highly visible */
+  /* Ensure focus indicators are highly visible with enhanced glow */
   *:focus-visible {
     outline: 4px solid #FDC500 !important;
     outline-offset: 3px !important;
+    box-shadow: 0 0 0 6px rgba(253, 197, 0, 0.3),
+                0 0 30px rgba(253, 197, 0, 0.6) !important;
   }
 
   /* Increase text contrast */
@@ -368,6 +576,17 @@ select:focus-visible {
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -693,4 +912,361 @@ input[type="range"].slider-vertical::-moz-range-track {
   left: 0;
   right: 0;
   bottom: 0;
+}
+
+/* ============================================================================
+   Micro-Interaction Utility Classes
+   ============================================================================ */
+
+/* Animation Constants as CSS Variables */
+:root {
+  /* Easing Functions */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
+  --ease-spring: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.0, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+  
+  /* Durations */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-very-slow: 700ms;
+  --duration-quick: 200ms;
+  --duration-image: 400ms;
+  --duration-panel: 500ms;
+  
+  /* Delays */
+  --delay-stagger: 75ms;
+  --delay-sequence: 150ms;
+  --delay-short: 50ms;
+  --delay-medium: 100ms;
+  --delay-long: 200ms;
+}
+
+/* Button Press Effect - Quick scale down on active state */
+.btn-press {
+  transition: transform var(--duration-fast) var(--ease-out);
+  will-change: transform;
+}
+
+.btn-press:active {
+  transform: scale(0.95);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .btn-press {
+    transition: none;
+  }
+  
+  .btn-press:active {
+    transform: none;
+  }
+}
+
+/* Hover Lift Effect - Subtle elevation on hover */
+.hover-lift {
+  transition: transform var(--duration-normal) var(--ease-out-expo),
+              box-shadow var(--duration-normal) var(--ease-out-expo);
+  will-change: transform, box-shadow;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift {
+    transition: none;
+  }
+  
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
+/* Yellow Glow Effect - Brand color glow on hover/focus */
+.glow-yellow {
+  transition: box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+  will-change: box-shadow, transform;
+}
+
+.glow-yellow:hover,
+.glow-yellow:focus-visible {
+  box-shadow: 0 0 20px rgba(253, 197, 0, 0.6),
+              0 0 40px rgba(253, 197, 0, 0.3);
+  transform: scale(1.02);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .glow-yellow {
+    transition: none;
+  }
+  
+  .glow-yellow:hover,
+  .glow-yellow:focus-visible {
+    transform: none;
+  }
+}
+
+/* Purple Glow Effect - Accent color glow on hover/focus */
+.glow-purple {
+  transition: box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+  will-change: box-shadow, transform;
+}
+
+.glow-purple:hover,
+.glow-purple:focus-visible {
+  box-shadow: 0 0 20px rgba(92, 0, 153, 0.6),
+              0 0 40px rgba(92, 0, 153, 0.3);
+  transform: scale(1.02);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .glow-purple {
+    transition: none;
+  }
+  
+  .glow-purple:hover,
+  .glow-purple:focus-visible {
+    transform: none;
+  }
+}
+
+/* Combined Button Press + Hover Lift */
+.btn-press.hover-lift:active {
+  transform: translateY(-2px) scale(0.95);
+}
+
+/* Combined Button Press + Glow Yellow */
+.btn-press.glow-yellow:active {
+  transform: scale(0.93);
+}
+
+/* Combined Button Press + Glow Purple */
+.btn-press.glow-purple:active {
+  transform: scale(0.93);
+}
+
+/* Smooth Scale Transition - For icons and small elements */
+.smooth-scale {
+  transition: transform var(--duration-fast) var(--ease-out);
+  will-change: transform;
+}
+
+.smooth-scale:hover {
+  transform: scale(1.1);
+}
+
+.smooth-scale:active {
+  transform: scale(0.95);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .smooth-scale {
+    transition: none;
+  }
+  
+  .smooth-scale:hover,
+  .smooth-scale:active {
+    transform: none;
+  }
+}
+
+/* Smooth Rotate - For loading spinners and icons */
+.smooth-rotate {
+  transition: transform var(--duration-normal) var(--ease-in-out-circ);
+  will-change: transform;
+}
+
+.smooth-rotate:hover {
+  transform: rotate(90deg);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .smooth-rotate {
+    transition: none;
+  }
+  
+  .smooth-rotate:hover {
+    transform: none;
+  }
+}
+
+/* Fade In Animation */
+.fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+/* Slide In From Right */
+.slide-in-right {
+  animation: slide-in-right var(--duration-slow) var(--ease-out-expo);
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Scale and Fade In - For images */
+.scale-fade-in {
+  animation: scale-fade-in var(--duration-image) var(--ease-out);
+}
+
+@keyframes scale-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Bounce In - Playful entrance */
+.bounce-in {
+  animation: bounce-in var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes bounce-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Stagger Animation Utilities */
+.stagger-1 { animation-delay: calc(var(--delay-stagger) * 1); }
+.stagger-2 { animation-delay: calc(var(--delay-stagger) * 2); }
+.stagger-3 { animation-delay: calc(var(--delay-stagger) * 3); }
+.stagger-4 { animation-delay: calc(var(--delay-stagger) * 4); }
+.stagger-5 { animation-delay: calc(var(--delay-stagger) * 5); }
+.stagger-6 { animation-delay: calc(var(--delay-stagger) * 6); }
+.stagger-7 { animation-delay: calc(var(--delay-stagger) * 7); }
+.stagger-8 { animation-delay: calc(var(--delay-stagger) * 8); }
+
+/* Disable all animations for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .slide-in-right,
+  .scale-fade-in,
+  .bounce-in {
+    animation: none !important;
+  }
+  
+  .stagger-1,
+  .stagger-2,
+  .stagger-3,
+  .stagger-4,
+  .stagger-5,
+  .stagger-6,
+  .stagger-7,
+  .stagger-8 {
+    animation-delay: 0ms !important;
+  }
+}
+
+/* GPU Acceleration for smooth animations */
+.will-animate {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Remove will-change after animation completes to save resources */
+.will-animate.animation-complete {
+  will-change: auto;
+}
+
+/* Scale-in animation for collapsible panels */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Control Toolbar Button Styles */
+.btn-toolbar {
+  @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  @apply transition-all duration-300;
+  @apply text-white/80 hover:text-white;
+  @apply hover:scale-110 active:scale-95;
+  background: rgba(255, 255, 255, 0.1);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-toolbar:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-toolbar-active {
+  @apply bg-[#FDC500] text-[#03071E];
+  @apply hover:bg-[#FFD500];
+  @apply shadow-lg shadow-yellow-500/20;
+}
+
+.btn-toolbar-active:hover {
+  @apply shadow-xl shadow-yellow-500/30;
+}
+
+.btn-toolbar-danger {
+  @apply bg-red-500/90 text-white;
+  @apply hover:bg-red-600;
+  @apply shadow-lg shadow-red-500/20;
+}
+
+.btn-toolbar-danger:hover {
+  @apply shadow-xl shadow-red-500/30;
+}
+
+/* Smooth slide-in animation for toolbar expansion with GPU acceleration */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateZ(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 500ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  /* Force GPU acceleration for buttery smooth 60fps */
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
 }

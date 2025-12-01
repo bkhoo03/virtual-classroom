@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Undo, Redo, Trash2, Save } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface WhiteboardActionsProps {
@@ -13,7 +14,7 @@ interface WhiteboardActionsProps {
 
 /**
  * WhiteboardActions component provides action controls
- * for undo, redo, clear, and save operations
+ * for undo, redo, clear, and save operations with modern icons and glass-morphism
  */
 export default function WhiteboardActions({
   canUndo,
@@ -50,9 +51,10 @@ export default function WhiteboardActions({
 
   return (
     <div
-      className={`flex flex-col gap-1 p-2 bg-white/95 backdrop-blur-md rounded-xl shadow-md border border-gray-200 ${className}`}
+      className={`flex flex-col gap-1 p-2 bg-white/10 backdrop-blur-md rounded-xl shadow-lg border border-white/20 ${className}`}
       style={{
         backdropFilter: 'blur(12px)',
+        background: 'rgba(255, 255, 255, 0.1)',
       }}
     >
       {/* Undo */}
@@ -65,18 +67,19 @@ export default function WhiteboardActions({
           className={`
             w-11 h-11 flex items-center justify-center rounded-lg
             transition-all duration-200 ease-in-out
+            active:scale-95
             ${
               !canUndo
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-white/5 text-gray-400 cursor-not-allowed opacity-50'
                 : hoveredAction === 'undo'
-                ? 'bg-purple-100 text-gray-900'
-                : 'bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-gray-900'
+                ? 'bg-yellow-500 text-gray-900 scale-105'
+                : 'bg-white/10 text-gray-700 hover:bg-yellow-500 hover:text-gray-900 hover:scale-105'
             }
           `}
           aria-label="Undo"
           aria-disabled={!canUndo}
         >
-          <span className="text-xl font-medium select-none">↶</span>
+          <Undo className="w-5 h-5" />
         </button>
       </Tooltip>
 
@@ -90,23 +93,24 @@ export default function WhiteboardActions({
           className={`
             w-11 h-11 flex items-center justify-center rounded-lg
             transition-all duration-200 ease-in-out
+            active:scale-95
             ${
               !canRedo
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-white/5 text-gray-400 cursor-not-allowed opacity-50'
                 : hoveredAction === 'redo'
-                ? 'bg-purple-100 text-gray-900'
-                : 'bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-gray-900'
+                ? 'bg-yellow-500 text-gray-900 scale-105'
+                : 'bg-white/10 text-gray-700 hover:bg-yellow-500 hover:text-gray-900 hover:scale-105'
             }
           `}
           aria-label="Redo"
           aria-disabled={!canRedo}
         >
-          <span className="text-xl font-medium select-none">↷</span>
+          <Redo className="w-5 h-5" />
         </button>
       </Tooltip>
 
       {/* Divider */}
-      <div className="h-px bg-gray-200 my-1" />
+      <div className="h-px bg-white/20 my-1" />
 
       {/* Clear All */}
       <Tooltip
@@ -120,17 +124,18 @@ export default function WhiteboardActions({
           className={`
             w-11 h-11 flex items-center justify-center rounded-lg
             transition-all duration-200 ease-in-out
+            active:scale-95
             ${
               showClearConfirm
-                ? 'bg-red-500 text-white animate-pulse'
+                ? 'bg-red-500 text-white animate-pulse scale-105'
                 : hoveredAction === 'clear'
-                ? 'bg-red-50 text-red-600 hover:bg-red-500 hover:text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-red-50 hover:text-red-600'
+                ? 'bg-red-500 text-white scale-105'
+                : 'bg-white/10 text-gray-700 hover:bg-red-500 hover:text-white hover:scale-105'
             }
           `}
           aria-label="Clear all"
         >
-          <span className="text-xl font-medium select-none">🗑️</span>
+          <Trash2 className="w-5 h-5" />
         </button>
       </Tooltip>
 
@@ -143,15 +148,16 @@ export default function WhiteboardActions({
           className={`
             w-11 h-11 flex items-center justify-center rounded-lg
             transition-all duration-200 ease-in-out
+            active:scale-95
             ${
               hoveredAction === 'save'
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-green-50 hover:text-green-600'
+                ? 'bg-green-500 text-white scale-105'
+                : 'bg-white/10 text-gray-700 hover:bg-green-500 hover:text-white hover:scale-105'
             }
           `}
           aria-label="Save as image"
         >
-          <span className="text-xl font-medium select-none">💾</span>
+          <Save className="w-5 h-5" />
         </button>
       </Tooltip>
     </div>

@@ -25,9 +25,15 @@ if (!existsSync(publicDir)) {
 
 // Copy worker file
 try {
-  copyFileSync(workerSource, workerDest);
-  console.log('✅ PDF.js worker copied to public directory');
+  if (existsSync(workerSource)) {
+    copyFileSync(workerSource, workerDest);
+    console.log('✅ PDF.js worker copied to public directory');
+  } else {
+    console.warn('⚠️  PDF.js worker source not found, skipping copy');
+    console.warn('   This is expected in some build environments');
+  }
 } catch (error) {
-  console.error('❌ Failed to copy PDF.js worker:', error.message);
-  process.exit(1);
+  console.warn('⚠️  Failed to copy PDF.js worker:', error.message);
+  console.warn('   Continuing build anyway...');
+  // Don't exit with error - let the build continue
 }

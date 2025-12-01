@@ -1,11 +1,13 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Button } from './Button';
+import errorLoggingService from '../services/ErrorLoggingService';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  component?: string;
 }
 
 interface State {
@@ -16,7 +18,9 @@ interface State {
 
 /**
  * ErrorBoundary component catches JavaScript errors anywhere in the child component tree,
- * logs those errors, and displays a fallback UI instead of crashing the whole app.
+ * logs those errors with full context, and displays a fallback UI instead of crashing the whole app.
+ * 
+ * Validates Requirements 12.4 (Error boundary catching)
  */
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -38,8 +42,18 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error details
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    // Log error with comprehensive context using ErrorLoggingService
+    errorLoggingService.logComponentError(
+      error,
+      errorInfo.componentStack || '',
+      {
+        component: this.props.component || 'Unknown',
+        additionalData: {
+          errorBoundary: true,
+          componentStack: errorInfo.componentStack,
+        },
+      }
+    );
     
     // Update state with error info
     this.setState({

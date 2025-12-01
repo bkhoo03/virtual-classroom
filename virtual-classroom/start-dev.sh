@@ -12,6 +12,15 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
+# Check for --clean flag
+if [ "$1" = "--clean" ] || [ "$1" = "-c" ]; then
+    echo "🧹 Cleaning build cache..."
+    rm -rf node_modules/.vite
+    rm -rf dist
+    echo "✅ Cache cleared!"
+    echo ""
+fi
+
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
     echo "❌ Error: Node.js is not installed"

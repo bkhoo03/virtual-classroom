@@ -2,23 +2,37 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import TabButton from '../components/TabButton';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { getPresentationModeManager } from '../services/PresentationModeManager';
+import type { PresentationMode } from '../types';
 
 interface ClassroomLayoutProps {
   chatPanel: ReactNode;
   aiOutputPanel: ReactNode;
   videoModule: ReactNode;
   presentationPanel: ReactNode;
-  whiteboardPanel: ReactNode;
+  // whiteboardPanel removed - whiteboard is now part of PresentationPanel
 }
 
 type TabType = 'ai-output' | 'presentation' | 'whiteboard';
+
+// Map PresentationMode to TabType
+const modeToTab = (mode: PresentationMode): TabType => {
+  // All presentation modes (pdf, screenshare, whiteboard) go to presentation tab
+  if (mode === 'pdf' || mode === 'screenshare' || mode === 'whiteboard') return 'presentation';
+  return mode as TabType;
+};
+
+// Map TabType to PresentationMode (default to pdf for presentation tab)
+const tabToMode = (tab: TabType): PresentationMode => {
+  if (tab === 'presentation') return 'pdf';
+  return tab as PresentationMode;
+};
 
 export default function ClassroomLayout({
   chatPanel,
   aiOutputPanel,
   videoModule,
   presentationPanel,
-  whiteboardPanel,
 }: ClassroomLayoutProps) {
   // Load initial width from localStorage or default to 45%
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
@@ -26,31 +40,85 @@ export default function ClassroomLayout({
     return saved ? parseFloat(saved) : 45;
   });
   
-  const [activeTab, setActiveTab] = useState<TabType>('ai-output');
+  const modeManagerRef = useRef(getPresentationModeManager());
+  
+  // Initialize activeTab based on the mode manager's current mode
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const currentMode = modeManagerRef.current.getCurrentMode();
+    return modeToTab(currentMode);
+  });
+  const [previousMode, setPreviousMode] = useState<PresentationMode | null>(null);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard shortcuts for tab navigation (Ctrl+1, Ctrl+2, Ctrl+3)
+  // Listen to mode changes from PresentationModeManager
+  useEffect(() => {
+    const modeManager = modeManagerRef.current;
+    
+    const unsubscribe = modeManager.onModeChange((mode) => {
+      console.log('[ClassroomLayout] Mode changed to:', mode);
+      const newTab = modeToTab(mode);
+      console.log('[ClassroomLayout] Setting activeTab to:', newTab);
+      setActiveTab(newTab);
+      setPreviousMode(modeManager.getPreviousMode());
+    });
+    
+    // Initialize with current mode and sync if needed
+    const currentMode = modeManager.getCurrentMode();
+    const currentTab = modeToTab(currentMode);
+    if (currentTab !== activeTab) {
+      setActiveTab(currentTab);
+    }
+    setPreviousMode(modeManager.getPreviousMode());
+    
+    return unsubscribe;
+  }, []);
+  
+  // Handle tab changes and sync with PresentationModeManager
+  const handleTabChange = useCallback(async (tab: TabType) => {
+    const modeManager = modeManagerRef.current;
+    const targetMode = tabToMode(tab);
+    
+    try {
+      await modeManager.switchMode(targetMode, {
+        animate: true,
+        preserveState: true,
+        reason: 'user',
+      });
+    } catch (err) {
+      console.error('[ClassroomLayout] Failed to switch mode:', err);
+      // Fallback to direct tab change
+      setActiveTab(tab);
+    }
+  }, []);
+  
+  // Handle return to previous mode
+  const handleReturnToPreviousMode = useCallback(async () => {
+    const modeManager = modeManagerRef.current;
+    
+    try {
+      await modeManager.returnToPreviousMode();
+    } catch (err) {
+      console.error('[ClassroomLayout] Failed to return to previous mode:', err);
+    }
+  }, []);
+
+  // Keyboard shortcuts for tab navigation (Ctrl+1, Ctrl+2)
   useKeyboardShortcuts({
     shortcuts: [
       {
         key: '1',
         ctrlKey: true,
-        action: () => setActiveTab('ai-output'),
+        action: () => handleTabChange('ai-output'),
         description: 'Switch to AI Output tab',
       },
       {
         key: '2',
         ctrlKey: true,
-        action: () => setActiveTab('presentation'),
+        action: () => handleTabChange('presentation'),
         description: 'Switch to Presentation tab',
       },
-      {
-        key: '3',
-        ctrlKey: true,
-        action: () => setActiveTab('whiteboard'),
-        description: 'Switch to Whiteboard tab',
-      },
+      // Whiteboard removed - use top toolbar "Board" button instead
     ],
     enabled: true,
   });
@@ -171,15 +239,15 @@ export default function ClassroomLayout({
         
         {/* Right Panel - AI Output & Content */}
         <main id="main-content" className="flex-1 flex flex-col min-w-0" aria-label="Main content">
-          {/* Minimal Tab Bar */}
+          {/* Minimal Tab Bar with Previous Mode Indicator */}
           <nav 
             className="h-12 px-4 flex items-center gap-1 border-b border-gray-200 bg-gray-50 flex-shrink-0"
             role="tablist"
-            aria-label="Content tabs (Use Ctrl+1, Ctrl+2, Ctrl+3 to switch)"
+            aria-label="Content tabs (Use Ctrl+1, Ctrl+2 to switch)"
           >
             <TabButton 
               active={activeTab === 'ai-output'}
-              onClick={() => setActiveTab('ai-output')}
+              onClick={() => handleTabChange('ai-output')}
               icon={
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -191,7 +259,7 @@ export default function ClassroomLayout({
             />
             <TabButton 
               active={activeTab === 'presentation'}
-              onClick={() => setActiveTab('presentation')}
+              onClick={() => handleTabChange('presentation')}
               icon={
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -201,22 +269,29 @@ export default function ClassroomLayout({
               ariaLabel="Presentation (Ctrl+2)"
               ariaControls="presentation-panel"
             />
-            <TabButton 
-              active={activeTab === 'whiteboard'}
-              onClick={() => setActiveTab('whiteboard')}
-              icon={
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              }
-              label="Whiteboard"
-              ariaLabel="Whiteboard (Ctrl+3)"
-              ariaControls="whiteboard-panel"
-            />
+            {/* Whiteboard tab removed - use top toolbar "Board" button instead */}
+            
+            {/* Previous Mode Indicator - shown when in AI output and there's a previous mode */}
+            {activeTab === 'ai-output' && previousMode && previousMode !== 'ai-output' && (
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={handleReturnToPreviousMode}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#FDC500] text-[#03071E] hover:bg-[#FFD500] transition-all duration-300 text-sm font-medium shadow-sm hover:shadow-md"
+                  style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+                  aria-label={`Return to previous mode: ${previousMode}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  <span>Back to {previousMode === 'pdf' || previousMode === 'screenshare' ? 'Presentation' : previousMode}</span>
+                </button>
+              </div>
+            )}
           </nav>
           
           {/* Content Area with smooth 300ms fade transitions */}
           <div className="flex-1 overflow-hidden bg-white relative">
+            {console.log('[ClassroomLayout] Rendering with activeTab:', activeTab)}
             <div 
               id="ai-output-panel"
               role="tabpanel"
@@ -247,21 +322,8 @@ export default function ClassroomLayout({
             >
               {presentationPanel}
             </div>
-            <div 
-              id="whiteboard-panel"
-              role="tabpanel"
-              aria-labelledby="whiteboard-tab"
-              aria-hidden={activeTab !== 'whiteboard'}
-              className={`absolute inset-0 transition-opacity ${
-                activeTab === 'whiteboard' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-              }`}
-              style={{
-                transitionDuration: '300ms',
-                transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
-              }}
-            >
-              {whiteboardPanel}
-            </div>
+            {/* Whiteboard panel removed - whiteboard is now part of PresentationPanel */}
+            {/* The whiteboard mode is handled inside PresentationPanel via TopToolbar */}
           </div>
         </main>
       </div>

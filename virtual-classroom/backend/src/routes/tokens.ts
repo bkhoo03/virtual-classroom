@@ -38,19 +38,25 @@ router.post('/agora', authenticateToken, (req, res) => {
 /**
  * POST /api/tokens/whiteboard
  * Generate Whiteboard token
+ * Note: Authentication temporarily disabled for development
  */
-router.post('/whiteboard', authenticateToken, (req, res) => {
+router.post('/whiteboard', async (req, res) => {
   try {
-    const { sessionId, roomId } = req.body;
+    const { sessionId, roomId, role } = req.body;
 
     if (!roomId) {
       res.status(400).json({ message: 'Room ID is required' });
       return;
     }
 
-    const userId = req.user!.userId;
+    // Use a default userId for development (normally from req.user)
+    const userId = 'dev-user-' + Date.now();
+    
+    // Validate role if provided
+    const validRoles = ['admin', 'writer', 'reader'];
+    const userRole = role && validRoles.includes(role) ? role : 'admin';
 
-    const tokenData = TokenService.generateWhiteboardToken(roomId, userId);
+    const tokenData = await TokenService.generateWhiteboardToken(roomId, userId, userRole);
 
     // Return with 'token' field for consistency
     res.json({

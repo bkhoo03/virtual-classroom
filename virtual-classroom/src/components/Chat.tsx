@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Send, Sparkles, X, MessageCircle, ChevronDown } from 'lucide-react';
 import AIService from '../services/AIService';
 import type { AIMessage, AIError } from '../types/ai.types';
 import { useToast } from '../contexts/ToastContext';
 import MediaRenderer from './MediaRenderer';
+import { aiContentBroadcaster } from '../services/AIContentBroadcaster';
 
 interface ChatProps {
   sessionId?: string;
   onMediaShare?: (media: any) => void;
+  isCollapsed?: boolean;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 // Format time as HH:MM AM/PM
@@ -33,14 +37,18 @@ const formatDate = (date: Date) => {
   }
 };
 
-export default function Chat({ onMediaShare }: ChatProps) {
+export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountChange }: ChatProps) {
   const { showToast } = useToast();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [aiService, setAiService] = useState<AIService | null>(null);
   const [isAIEnabled, setIsAIEnabled] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const previousMessagesLengthRef = useRef(0);
 
   // Initialize AI service
   useEffect(() => {
@@ -52,10 +60,60 @@ export default function Chat({ onMediaShare }: ChatProps) {
     }
   }, []);
 
-  // Auto-scroll to bottom
+  // Track scroll position to determine if user is at bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 50; // 50px threshold
+      setIsAtBottom(atBottom);
+      
+      // If scrolled to bottom, clear unread count
+      if (atBottom && unreadCount > 0) {
+        setUnreadCount(0);
+        onUnreadCountChange?.(0);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [unreadCount, onUnreadCountChange]);
+
+  // Auto-scroll to bottom when new messages arrive (only if already at bottom)
+  useEffect(() => {
+    if (isAtBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isLoading, isAtBottom]);
+
+  // Track unread messages when new messages arrive and not at bottom
+  useEffect(() => {
+    const newMessagesCount = messages.length - previousMessagesLengthRef.current;
+    
+    if (newMessagesCount > 0 && !isAtBottom && !isCollapsed) {
+      // Only count messages from AI (not user's own messages)
+      const newMessages = messages.slice(-newMessagesCount);
+      const unreadMessages = newMessages.filter(msg => msg.role === 'assistant');
+      
+      if (unreadMessages.length > 0) {
+        const newUnreadCount = unreadCount + unreadMessages.length;
+        setUnreadCount(newUnreadCount);
+        onUnreadCountChange?.(newUnreadCount);
+      }
+    }
+    
+    previousMessagesLengthRef.current = messages.length;
+  }, [messages, isAtBottom, isCollapsed, unreadCount, onUnreadCountChange]);
+
+  // Clear unread count when chat is expanded
+  useEffect(() => {
+    if (!isCollapsed && unreadCount > 0) {
+      setUnreadCount(0);
+      onUnreadCountChange?.(0);
+    }
+  }, [isCollapsed, unreadCount, onUnreadCountChange]);
 
   const handleSendMessage = useCallback(async () => {
     const trimmedMessage = inputMessage.trim();
@@ -77,17 +135,103 @@ export default function Chat({ onMediaShare }: ChatProps) {
       try {
         // Get conversation context (last 10 messages)
         const context = messages.slice(-10);
-        const response = await aiService.sendMessage([...context, userMessage], {
+        
+        console.log('🔍 Sending message with full multimodal support (web search, image search, image generation)...');
+        
+        const result = await aiService.sendFullMultimodalMessage([...context, userMessage], {
           temperature: 0.7,
           maxTokens: 2000,
+          enableProactiveImages: true, // Enable proactive image enhancement
+          preferUnsplash: true, // Prefer Unsplash over DALL-E for cost savings
         });
+
+        console.log('📸 Multimodal result:', {
+          images: result.images ? `Found ${result.images.length} Unsplash images` : 'No Unsplash images',
+          generatedImages: result.generatedImages ? `Generated ${result.generatedImages.length} DALL-E images` : 'No generated images',
+          searchResults: result.searchResults ? `Found ${result.searchResults.length} search results` : 'No search results',
+        });
+
+        // Broadcast to AI Output Panel
+        const allImages = [
+          ...(result.images || []),
+          ...(result.generatedImages || []),
+        ];
+        
+        console.log('🎯 Broadcasting to AI Output Panel:', {
+          hasImages: allImages.length > 0,
+          hasSearchResults: result.searchResults && result.searchResults.length > 0,
+          imageCount: allImages.length,
+          searchResultCount: result.searchResults?.length || 0,
+        });
+        
+        if (allImages.length > 0 || (result.searchResults && result.searchResults.length > 0)) {
+          console.log('✅ Broadcasting multimodal content to AI Output Panel');
+          aiContentBroadcaster.broadcast({
+            id: `ai-content-${Date.now()}`,
+            userQuery: trimmedMessage,
+            textResponse: result.response.choices[0]?.message?.content || '',
+            images: allImages,
+            searchResults: result.searchResults || [],
+            timestamp: new Date(),
+            cost: {
+              text: (result.response.usage.total_tokens / 1000) * 0.002,
+              images: (result.generatedImages?.length || 0) * 0.02,
+              search: (result.searchResults?.length || 0) * 0.001,
+              total: ((result.response.usage.total_tokens / 1000) * 0.002) + 
+                     ((result.generatedImages?.length || 0) * 0.02) + 
+                     ((result.searchResults?.length || 0) * 0.001),
+            },
+            imageSource: result.images && result.images.length > 0 
+              ? (result.generatedImages && result.generatedImages.length > 0 ? 'both' : 'unsplash')
+              : (result.generatedImages && result.generatedImages.length > 0 ? 'dalle' : 'none'),
+          });
+        }
+
+        // Combine Unsplash images and generated images for chat display
+        const allMedia = [];
+        
+        // Add Unsplash images
+        if (result.images) {
+          allMedia.push(...result.images.map(img => ({
+            type: 'image' as const,
+            url: img.url,
+            thumbnail: img.thumbnailUrl,
+            title: img.description,
+            description: `Photo by ${img.photographer} on Unsplash`,
+            attribution: {
+              photographer: img.photographer,
+              photographerUrl: img.photographerUrl,
+              source: 'Unsplash',
+              sourceUrl: img.unsplashUrl,
+            },
+          })));
+        }
+        
+        // Add generated images
+        if (result.generatedImages) {
+          allMedia.push(...result.generatedImages.map(img => ({
+            type: 'image' as const,
+            url: img.compressedUrl || img.url,
+            thumbnail: img.compressedUrl || img.url,
+            title: img.revisedPrompt || 'AI Generated Image',
+            description: 'Generated by DALL-E',
+            attribution: {
+              photographer: 'DALL-E',
+              photographerUrl: 'https://openai.com/dall-e',
+              source: 'OpenAI',
+              sourceUrl: img.url,
+            },
+          })));
+        }
 
         const aiMessage: AIMessage = {
           id: `ai-${Date.now()}`,
           role: 'assistant',
-          content: response.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
+          content: result.response.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
           timestamp: new Date(),
+          media: allMedia.length > 0 ? allMedia : undefined,
         };
+        
         setMessages(prev => [...prev, aiMessage]);
       } catch (err: any) {
         console.error('AI error:', err);
@@ -117,8 +261,21 @@ export default function Chat({ onMediaShare }: ChatProps) {
 
   return (
     <div className="h-full flex flex-col bg-white" role="region" aria-label="Chat messages">
+      {/* Unread indicator badge */}
+      {unreadCount > 0 && isCollapsed && (
+        <div 
+          className="absolute top-2 right-2 z-10 bg-[#FDC500] text-[#03071E] text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse"
+          role="status"
+          aria-live="polite"
+          aria-label={`${unreadCount} unread message${unreadCount > 1 ? 's' : ''}`}
+        >
+          {unreadCount > 9 ? '9+' : unreadCount}
+        </div>
+      )}
+
       {/* Messages Area */}
       <div 
+        ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
         role="log"
         aria-live="polite"
@@ -127,10 +284,8 @@ export default function Chat({ onMediaShare }: ChatProps) {
       >
         {messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8" role="status">
-            <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-4" aria-hidden="true">
-              <svg className="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+            <div className="w-20 h-20 glass-purple rounded-full flex items-center justify-center mb-4 animate-fade-in" aria-hidden="true">
+              <MessageCircle className="w-10 h-10 text-[#5C0099]" />
             </div>
             <p className="text-gray-900 font-semibold text-base mb-2">Start a conversation</p>
             <p className="text-gray-500 text-sm max-w-xs">
@@ -160,27 +315,25 @@ export default function Chat({ onMediaShare }: ChatProps) {
               
               {/* Message */}
               <div
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
                 role="article"
                 aria-label={`${message.role === 'user' ? 'Your message' : message.role === 'assistant' ? 'AI Assistant message' : 'Message'} at ${formatTime(new Date(message.timestamp))}`}
               >
                 <div
-                  className={`rounded-2xl max-w-[75%] shadow-sm ${
+                  className={`rounded-2xl max-w-[75%] shadow-lg transition-all duration-300 hover:scale-[1.02] ${
                     message.role === 'user'
-                      ? 'bg-purple-600 text-white rounded-br-md'
+                      ? 'bg-gradient-to-br from-[#FDC500] to-[#FFD500] text-gray-900 rounded-br-md'
                       : message.role === 'assistant'
-                      ? 'bg-gray-100 text-gray-900 rounded-bl-md border border-gray-200'
-                      : 'bg-gray-100 text-gray-900 rounded-bl-md border border-gray-200'
+                      ? 'glass text-gray-900 rounded-bl-md'
+                      : 'glass text-gray-900 rounded-bl-md'
                   }`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2">
-                      <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center" aria-hidden="true">
-                        <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
+                    <div className="px-3 py-2 border-b border-white/20 flex items-center gap-2">
+                      <div className="w-6 h-6 glass-purple rounded-full flex items-center justify-center" aria-hidden="true">
+                        <Sparkles className="w-4 h-4 text-[#5C0099]" />
                       </div>
-                      <span className="text-xs font-semibold text-purple-600">AI Assistant</span>
+                      <span className="text-xs font-semibold text-[#5C0099]">AI Assistant</span>
                     </div>
                   )}
                   <div className="px-3 py-2">
@@ -193,7 +346,8 @@ export default function Chat({ onMediaShare }: ChatProps) {
                       {message.media.map((media, mediaIndex) => (
                         <MediaRenderer 
                           key={mediaIndex} 
-                          media={media} 
+                          media={media}
+                          attribution={media.attribution}
                           onShare={onMediaShare}
                         />
                       ))}
@@ -202,7 +356,7 @@ export default function Chat({ onMediaShare }: ChatProps) {
                   {/* Timestamp */}
                   <div className={`px-3 pb-2 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <span className={`text-xs ${
-                      message.role === 'user' ? 'text-white/70' : 'text-gray-500'
+                      message.role === 'user' ? 'text-gray-700/70' : 'text-gray-500'
                     }`}>
                       {formatTime(new Date(message.timestamp))}
                     </span>
@@ -214,13 +368,85 @@ export default function Chat({ onMediaShare }: ChatProps) {
         })}
 
         {isLoading && (
-          <div className="flex justify-start" role="status" aria-live="polite" aria-label="AI is thinking">
-            <div className="bg-gray-100 border border-gray-200 text-gray-900 rounded-2xl rounded-bl-md px-3 py-2 max-w-[75%] shadow-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} aria-hidden="true"></div>
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} aria-hidden="true"></div>
-                <div className="w-2 h-2 bg-purple-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} aria-hidden="true"></div>
-                <span className="text-sm text-gray-600 ml-1">AI thinking...</span>
+          <div className="flex justify-center py-4 animate-fade-in" role="status" aria-live="polite" aria-label="AI is thinking">
+            <div className="glass rounded-2xl p-4 shadow-lg">
+              {/* Animated spinner with yellow glow */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                  {/* Outer glow ring */}
+                  <div 
+                    className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400/20 to-yellow-600/20"
+                    style={{ 
+                      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                    }}
+                  />
+                  
+                  {/* Spinning ring */}
+                  <div className="absolute inset-0">
+                    <div className="w-12 h-12 rounded-full border-4 border-yellow-200" />
+                    <div 
+                      className="absolute inset-0 w-12 h-12 rounded-full border-4 border-yellow-500 border-t-transparent"
+                      style={{
+                        animation: 'spin 1s cubic-bezier(0.16, 1, 0.3, 1) infinite'
+                      }}
+                    />
+                  </div>
+
+                  {/* Center sparkle icon */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles 
+                      className="text-yellow-500" 
+                      size={20}
+                      style={{ 
+                        animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                      }}
+                    />
+                  </div>
+
+                  {/* Pulsing glow effect */}
+                  <div 
+                    className="absolute inset-0 rounded-full opacity-20"
+                    style={{
+                      background: 'radial-gradient(circle, rgba(253, 197, 0, 0.4) 0%, transparent 70%)',
+                      animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
+                    }}
+                  />
+                </div>
+
+                {/* Animated dots with infinite loop */}
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-2 h-2 rounded-full bg-yellow-500"
+                    style={{ 
+                      animation: 'bounce 1s infinite',
+                      animationDelay: '0ms'
+                    }}
+                  />
+                  <div 
+                    className="w-2 h-2 rounded-full bg-yellow-500"
+                    style={{ 
+                      animation: 'bounce 1s infinite',
+                      animationDelay: '150ms'
+                    }}
+                  />
+                  <div 
+                    className="w-2 h-2 rounded-full bg-yellow-500"
+                    style={{ 
+                      animation: 'bounce 1s infinite',
+                      animationDelay: '300ms'
+                    }}
+                  />
+                </div>
+
+                {/* Message text */}
+                <p 
+                  className="text-sm font-medium text-gray-700"
+                  style={{ 
+                    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  }}
+                >
+                  AI is thinking...
+                </p>
               </div>
             </div>
           </div>
@@ -229,9 +455,28 @@ export default function Chat({ onMediaShare }: ChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Scroll to bottom button when not at bottom and has unread */}
+      {!isAtBottom && unreadCount > 0 && (
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-10 animate-fade-in">
+          <button
+            onClick={() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+              setIsAtBottom(true);
+              setUnreadCount(0);
+              onUnreadCountChange?.(0);
+            }}
+            className="glass-yellow text-gray-900 px-4 py-2 rounded-full shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2 text-sm font-medium btn-press"
+            aria-label={`Scroll to bottom - ${unreadCount} new message${unreadCount > 1 ? 's' : ''}`}
+          >
+            <ChevronDown className="w-4 h-4" aria-hidden="true" />
+            <span>{unreadCount} new message{unreadCount > 1 ? 's' : ''}</span>
+          </button>
+        </div>
+      )}
+
       {/* Input Area */}
       <form 
-        className="px-4 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0"
+        className="px-4 py-4 border-t border-white/20 glass-subtle flex-shrink-0"
         onSubmit={(e) => {
           e.preventDefault();
           handleSendMessage();
@@ -241,25 +486,21 @@ export default function Chat({ onMediaShare }: ChatProps) {
         {/* AI Mode Indicator */}
         {isAIEnabled && (
           <div 
-            className="mb-3 flex items-center justify-between bg-purple-50 border border-purple-200 px-3 py-2 rounded-lg"
+            className="mb-3 flex items-center justify-between glass-purple px-3 py-2 rounded-lg animate-fade-in"
             role="status"
             aria-live="polite"
           >
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              <span className="text-xs text-purple-700 font-semibold">AI Mode Active</span>
+              <Sparkles className="w-4 h-4 text-[#5C0099]" aria-hidden="true" />
+              <span className="text-xs text-[#5C0099] font-semibold">AI Mode Active</span>
             </div>
             <button
               type="button"
               onClick={() => setIsAIEnabled(false)}
-              className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors px-2 py-1 hover:bg-white rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+              className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-all duration-300 px-2 py-1 hover:bg-white/50 rounded btn-press focus:outline-none focus:ring-2 focus:ring-[#5C0099] focus:ring-offset-2"
               aria-label="Exit AI mode and return to normal chat"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-4 h-4" aria-hidden="true" />
               <span className="text-xs">Exit</span>
             </button>
           </div>
@@ -278,7 +519,7 @@ export default function Chat({ onMediaShare }: ChatProps) {
             placeholder={isAIEnabled ? "Ask AI anything..." : "Type a message or ask AI..."}
             disabled={isLoading}
             aria-label={isAIEnabled ? "Ask AI anything" : "Type a message"}
-            className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
+            className="flex-1 px-4 py-3 glass border border-white/30 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:border-[#FDC500] focus:ring-2 focus:ring-[#FDC500]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
           />
           
           {/* Send Button */}
@@ -286,9 +527,9 @@ export default function Chat({ onMediaShare }: ChatProps) {
             type="submit"
             disabled={isLoading || !inputMessage.trim()}
             aria-label="Send message"
-            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            className="w-12 h-12 bg-[#FDC500] text-gray-900 rounded-xl font-medium hover:bg-[#FFD500] hover:scale-105 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#FDC500] focus:ring-offset-2 btn-press shadow-lg flex items-center justify-center"
           >
-            Send
+            <Send className="w-5 h-5" aria-hidden="true" />
           </button>
           
           {/* Ask AI Button - Always show when not in AI mode */}
@@ -303,12 +544,10 @@ export default function Chat({ onMediaShare }: ChatProps) {
                 setIsAIEnabled(true);
               }}
               disabled={isLoading}
-              className="px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center gap-2 text-purple-600 hover:bg-purple-100 hover:border-purple-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+              className="px-4 py-3 glass-purple rounded-xl flex items-center gap-2 text-[#5C0099] hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-[#5C0099] focus:ring-offset-2 btn-press shadow-lg"
               aria-label={!aiService ? 'AI service not available' : 'Enable AI mode'}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
+              <Sparkles className="w-5 h-5" aria-hidden="true" />
               <span className="text-sm font-medium whitespace-nowrap">Ask AI</span>
             </button>
           )}

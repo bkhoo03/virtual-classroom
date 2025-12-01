@@ -3,7 +3,6 @@ import type { Room } from 'white-web-sdk';
 import WhiteboardCanvas from './WhiteboardCanvas';
 import ToolPalette from './ToolPalette';
 import ColorPicker from './ColorPicker';
-import StrokeWidthSelector from './StrokeWidthSelector';
 import WhiteboardActions from './WhiteboardActions';
 import whiteboardService from '../services/WhiteboardService';
 import type { WhiteboardConfig, DrawingToolType } from '../types/whiteboard.types';
@@ -25,8 +24,7 @@ export default function Whiteboard({
 }: WhiteboardProps) {
   const [room, setRoom] = useState<Room | null>(null);
   const [selectedTool, setSelectedTool] = useState<DrawingToolType>('pencil');
-  const [selectedColor, setSelectedColor] = useState('#1a1a2e'); // Dark color for light background
-  const [strokeWidth, setStrokeWidth] = useState(6);
+  const [selectedColor, setSelectedColor] = useState('#000000'); // Black by default
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
@@ -47,8 +45,8 @@ export default function Whiteboard({
       updateUndoRedoState();
     });
 
-    // Poll for undo/redo state changes (as a fallback)
-    const interval = setInterval(updateUndoRedoState, 500);
+    // Poll for undo/redo state changes less frequently to reduce overhead
+    const interval = setInterval(updateUndoRedoState, 1000); // Reduced from 500ms to 1000ms
 
     return () => {
       clearInterval(interval);
@@ -58,11 +56,11 @@ export default function Whiteboard({
   const handleConnected = useCallback((connectedRoom: Room) => {
     setRoom(connectedRoom);
     
-    // Set initial tool state
+    // Set initial tool state with fixed medium stroke width
     whiteboardService.setTool(selectedTool);
     whiteboardService.setColor(selectedColor);
-    whiteboardService.setStrokeWidth(strokeWidth);
-  }, [selectedTool, selectedColor, strokeWidth]);
+    whiteboardService.setStrokeWidth(6); // Fixed medium width
+  }, [selectedTool, selectedColor]);
 
   const handleDisconnected = useCallback(() => {
     setRoom(null);
@@ -76,11 +74,6 @@ export default function Whiteboard({
   const handleColorChange = useCallback((color: string) => {
     setSelectedColor(color);
     whiteboardService.setColor(color);
-  }, []);
-
-  const handleStrokeWidthChange = useCallback((width: number) => {
-    setStrokeWidth(width);
-    whiteboardService.setStrokeWidth(width);
   }, []);
 
   const handleUndo = useCallback(() => {
@@ -144,7 +137,7 @@ export default function Whiteboard({
         onError={onError}
       />
 
-      {/* Tool Palette - Left side */}
+      {/* Left Toolbar - Tool Palette */}
       {room && (
         <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
           <ToolPalette
@@ -154,30 +147,16 @@ export default function Whiteboard({
         </div>
       )}
 
-      {/* Color Picker - Bottom left */}
+      {/* Right Toolbar - Colors and Actions */}
       {room && (
-        <div className="absolute left-4 bottom-4 z-10">
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-3">
+          {/* Color Picker */}
           <ColorPicker
             selectedColor={selectedColor}
             onColorChange={handleColorChange}
           />
-        </div>
-      )}
-
-      {/* Stroke Width Selector - Bottom center-left */}
-      {room && (
-        <div className="absolute left-56 bottom-4 z-10">
-          <StrokeWidthSelector
-            selectedWidth={strokeWidth}
-            onWidthChange={handleStrokeWidthChange}
-            currentColor={selectedColor}
-          />
-        </div>
-      )}
-
-      {/* Action Controls - Right side */}
-      {room && (
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 z-10">
+          
+          {/* Action Controls */}
           <WhiteboardActions
             canUndo={canUndo}
             canRedo={canRedo}

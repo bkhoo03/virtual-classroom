@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import ClassroomLayout from '../layouts/ClassroomLayout';
 import { ControlToolbar } from '../components';
 import { VideoCallSkeleton, PresentationSkeleton, ChatSkeleton } from '../components/skeletons';
@@ -14,7 +14,6 @@ const VideoCallModule = lazy(() => import('../components/VideoCallModule'));
 const PresentationPanel = lazy(() => import('../components/PresentationPanel'));
 const Chat = lazy(() => import('../components/Chat'));
 const AIOutputPanel = lazy(() => import('../components/AIOutputPanel'));
-const Whiteboard = lazy(() => import('../components/Whiteboard'));
 
 export default function ClassroomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -27,6 +26,9 @@ export default function ClassroomPage() {
   // Video control states - synced between VideoCallModule and ControlToolbar
   const [videoAudioMuted, setVideoAudioMuted] = useState(false);
   const [videoVideoOff, setVideoVideoOff] = useState(false);
+  
+  // Track if we're currently updating from toolbar to prevent loops
+  const isUpdatingFromToolbar = useRef(false);
   
   // Get user data from auth context
   const userId = authState.user?.id || '';
@@ -90,16 +92,22 @@ export default function ClassroomPage() {
 
   const handleChangePresentationMode = useCallback((mode: 'pdf' | 'screenshare' | 'whiteboard') => {
     console.log('Changing presentation mode to:', mode);
-    // The mode change is handled by the context via useClassroomControls
+    // The mode change is handled by the PresentationModeManager
+    // This is called from ControlToolbar, but the actual mode switching
+    // happens via TopToolbar in PresentationPanel
   }, []);
 
   // Callbacks to sync video control states from VideoCallModule
   const handleVideoAudioChange = useCallback((muted: boolean) => {
-    setVideoAudioMuted(muted);
+    if (!isUpdatingFromToolbar.current) {
+      setVideoAudioMuted(muted);
+    }
   }, []);
 
   const handleVideoVideoChange = useCallback((off: boolean) => {
-    setVideoVideoOff(off);
+    if (!isUpdatingFromToolbar.current) {
+      setVideoVideoOff(off);
+    }
   }, []);
 
   // Set up keyboard shortcuts and get control state
@@ -114,6 +122,34 @@ export default function ClassroomPage() {
     onToggleScreenShare: handleToggleScreenShare,
     onChangePresentationMode: handleChangePresentationMode,
   });
+
+  // Sync the context state to the video state when it changes
+  useEffect(() => {
+    setVideoAudioMuted(isAudioMuted);
+  }, [isAudioMuted]);
+
+  useEffect(() => {
+    setVideoVideoOff(isVideoOff);
+  }, [isVideoOff]);
+
+  // Wrap toolbar toggle functions to set the flag
+  const handleToolbarToggleAudio = useCallback(() => {
+    isUpdatingFromToolbar.current = true;
+    toggleAudio();
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isUpdatingFromToolbar.current = false;
+    }, 100);
+  }, [toggleAudio]);
+
+  const handleToolbarToggleVideo = useCallback(() => {
+    isUpdatingFromToolbar.current = true;
+    toggleVideo();
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isUpdatingFromToolbar.current = false;
+    }, 100);
+  }, [toggleVideo]);
 
   if (isLoading) {
     return (
@@ -183,30 +219,17 @@ export default function ClassroomPage() {
             <PresentationPanel />
           </Suspense>
         }
-        whiteboardPanel={
-          <Suspense fallback={<div className="h-full flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-600 border-t-transparent"></div></div>}>
-            <Whiteboard 
-              config={{
-                appId: import.meta.env.VITE_NETLESS_APP_ID || '',
-                roomId: sessionId || '',
-                roomToken: '', // Will be fetched by the component
-                userId: userId,
-                userRole: userRole === 'tutor' ? 'admin' : 'writer',
-              }}
-            />
-          </Suspense>
-        }
       />
       
       {/* Control Toolbar - floating at bottom center, synced with video controls */}
       <ControlToolbar
         isAudioMuted={videoAudioMuted}
         isVideoOff={videoVideoOff}
-        onToggleAudio={toggleAudio}
-        onToggleVideo={toggleVideo}
+        onToggleAudio={handleToolbarToggleAudio}
+        onToggleVideo={handleToolbarToggleVideo}
         isScreenSharing={isScreenSharing}
         onToggleScreenShare={handleToggleScreenShare}
-        presentationMode={presentationMode}
+        presentationMode={presentationMode === 'ai-output' ? undefined : presentationMode as 'pdf' | 'screenshare' | 'whiteboard'}
         onChangePresentationMode={handleChangePresentationMode}
         onLeaveClassroom={handleLeaveClassroom}
       />

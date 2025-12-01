@@ -22,21 +22,29 @@ class WhiteboardService {
       return;
     }
 
+    if (!appId) {
+      throw new Error('Whiteboard App ID is required');
+    }
+
     try {
       this.whiteWebSdk = new WhiteWebSdk.WhiteWebSdk({
         appIdentifier: appId,
-        region: 'cn-hz', // China region, adjust based on your deployment
-        deviceType: 'desktop',
+        region: 'us-sv', // US region - change to 'cn-hz' for China, 'sg' for Singapore, 'in-mum' for India
+        deviceType: 'desktop' as any,
+        // Performance optimizations
+        renderEngine: 'canvas' as any, // Use canvas for better performance
         // Enable debug mode in development
         loggerOptions: {
-          reportDebugLogMode: import.meta.env.DEV ? 'alwaysReport' : 'banReport',
-          reportQualityMode: import.meta.env.DEV ? 'alwaysReport' : 'banReport',
+          reportDebugLogMode: (import.meta.env.DEV ? 'alwaysReport' : 'banReport') as any,
+          reportQualityMode: (import.meta.env.DEV ? 'alwaysReport' : 'banReport') as any,
         },
+        // Optimize rendering
+        useMobXState: true, // Enable MobX for better state management
       });
-      console.log('Whiteboard SDK initialized successfully');
+      console.log('Whiteboard SDK initialized successfully with App ID:', appId);
     } catch (error) {
       console.error('Failed to initialize Whiteboard SDK:', error);
-      throw error;
+      throw new Error(`Failed to initialize Whiteboard SDK: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -48,6 +56,10 @@ class WhiteboardService {
       throw new Error('Whiteboard SDK not initialized. Call initialize() first.');
     }
 
+    if (!config.roomId || !config.roomToken) {
+      throw new Error('Room ID and room token are required');
+    }
+
     if (this.room) {
       console.warn('Already in a room. Leaving current room first.');
       await this.leaveRoom();
@@ -55,6 +67,12 @@ class WhiteboardService {
 
     try {
       this.config = config;
+
+      console.log('Joining whiteboard room:', {
+        roomId: config.roomId,
+        userId: config.userId,
+        userRole: config.userRole
+      });
 
       // Join the room with the provided configuration
       const room = await this.whiteWebSdk.joinRoom({
@@ -65,6 +83,16 @@ class WhiteboardService {
         isWritable: config.userRole === 'admin' || config.userRole === 'writer',
         disableNewPencil: false,
         floatBar: false, // Disable default toolbar, we'll use custom UI
+        // Performance optimizations
+        disableBezier: false, // Keep bezier curves for smooth drawing
+        disableEraseImage: false,
+        // Optimize rendering
+        cameraBound: {
+          damping: 0.5, // Smooth camera movement
+        },
+        // Reduce network traffic
+        invisiblePlugins: [], // No invisible plugins needed
+        wrappedComponents: [], // No wrapped components needed
       });
 
       this.room = room;
@@ -76,7 +104,8 @@ class WhiteboardService {
       return room;
     } catch (error) {
       console.error('Failed to join whiteboard room:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to join whiteboard room: ${errorMessage}`);
     }
   }
 
@@ -90,13 +119,31 @@ class WhiteboardService {
     }
 
     try {
+      console.log('Leaving whiteboard room...');
+      
+      // Disconnect from the room
       await this.room.disconnect();
+      
+      // Clear references
       this.room = null;
       this.config = null;
+      
+      // Clear callbacks
+      this.onStateChangeCallback = null;
+      this.onPhaseChangeCallback = null;
+      
       console.log('Left whiteboard room successfully');
     } catch (error) {
       console.error('Error leaving whiteboard room:', error);
-      throw error;
+      
+      // Force cleanup even if disconnect fails
+      this.room = null;
+      this.config = null;
+      this.onStateChangeCallback = null;
+      this.onPhaseChangeCallback = null;
+      
+      // Don't throw - we want cleanup to succeed even if disconnect fails
+      console.warn('Forced whiteboard cleanup after disconnect error');
     }
   }
 
@@ -124,47 +171,45 @@ class WhiteboardService {
     }
 
     try {
-      const memberState = this.room.state.memberState;
-
       switch (toolType) {
         case 'pencil':
           this.room.setMemberState({
-            currentApplianceName: 'pencil',
+            currentApplianceName: 'pencil' as any,
           });
           break;
         case 'rectangle':
           this.room.setMemberState({
-            currentApplianceName: 'rectangle',
+            currentApplianceName: 'rectangle' as any,
           });
           break;
         case 'circle':
           this.room.setMemberState({
-            currentApplianceName: 'ellipse',
+            currentApplianceName: 'ellipse' as any,
           });
           break;
         case 'line':
           this.room.setMemberState({
-            currentApplianceName: 'straight',
+            currentApplianceName: 'straight' as any,
           });
           break;
         case 'text':
           this.room.setMemberState({
-            currentApplianceName: 'text',
+            currentApplianceName: 'text' as any,
           });
           break;
         case 'eraser':
           this.room.setMemberState({
-            currentApplianceName: 'eraser',
+            currentApplianceName: 'eraser' as any,
           });
           break;
         case 'selector':
           this.room.setMemberState({
-            currentApplianceName: 'selector',
+            currentApplianceName: 'selector' as any,
           });
           break;
         case 'hand':
           this.room.setMemberState({
-            currentApplianceName: 'hand',
+            currentApplianceName: 'hand' as any,
           });
           break;
         default:
@@ -292,15 +337,16 @@ class WhiteboardService {
       const scene = this.room.state.sceneState;
       
       // Generate preview of the current scene
-      const preview = await this.room.screenshotToCanvas(
+      const preview = await (this.room as any).screenshotToCanvas(
         scene.scenePath,
         scene.index,
         1920, // width
-        1080  // height
+        1080, // height
+        'image/png'
       );
 
       // Convert canvas to data URL
-      return preview.toDataURL('image/png');
+      return (preview as HTMLCanvasElement).toDataURL('image/png');
     } catch (error) {
       console.error('Error exporting whiteboard image:', error);
       throw error;
@@ -328,7 +374,7 @@ class WhiteboardService {
     if (!this.room) return;
 
     // Listen for room state changes
-    this.room.callbacks.on('onRoomStateChanged', (state: Partial<RoomState>) => {
+    this.room.callbacks.on('onRoomStateChanged', () => {
       if (this.onStateChangeCallback && this.room) {
         this.onStateChangeCallback(this.room.state);
       }
@@ -374,15 +420,145 @@ class WhiteboardService {
   }
 
   /**
+   * Insert a converted document into the whiteboard
+   * Supports both static (images) and dynamic (interactive) documents
+   */
+  async insertDocument(
+    taskUuid: string,
+    taskProgress: {
+      prefix: string;
+      totalPageSize: number;
+      images: Array<{
+        name: string;
+        width: number;
+        height: number;
+        url: string;
+      }>;
+    },
+    type: 'static' | 'dynamic'
+  ): Promise<void> {
+    if (!this.room) {
+      throw new Error('No active room');
+    }
+
+    try {
+      console.log('Inserting document into whiteboard:', { taskUuid, type, pageCount: taskProgress.totalPageSize });
+
+      if (type === 'static') {
+        // For static documents, insert images as scenes
+        const scenes = taskProgress.images.map((image, index) => ({
+          name: `${index + 1}`,
+          ppt: {
+            src: image.url,
+            width: image.width,
+            height: image.height,
+            previewURL: image.url, // Add preview URL for better loading
+          },
+        }));
+
+        // Create a new scene directory for the document
+        const scenePath = `/document_${taskUuid}`;
+        
+        console.log('Creating scenes:', scenes);
+        console.log('Scene path:', scenePath);
+        
+        // Put scenes into the whiteboard
+        this.room.putScenes(scenePath, scenes);
+        
+        // Switch to the first page of the document
+        this.room.setScenePath(`${scenePath}/1`);
+        
+        console.log('Static document inserted successfully');
+      } else {
+        // For dynamic documents (PPT with animations)
+        // The conversion service provides a projector URL
+        // We need to use the whiteboard's insertPlugin method
+        console.warn('Dynamic document insertion not yet implemented');
+        // TODO: Implement dynamic document insertion using projector plugin
+      }
+    } catch (error) {
+      console.error('Error inserting document:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Navigate to a specific page in the current document
+   */
+  goToPage(pageNumber: number): void {
+    if (!this.room) {
+      console.warn('No active room');
+      return;
+    }
+
+    try {
+      const currentPath = this.room.state.sceneState.scenePath;
+      const pathParts = currentPath.split('/');
+      
+      // Replace the last part (page number) with the new page number
+      pathParts[pathParts.length - 1] = pageNumber.toString();
+      const newPath = pathParts.join('/');
+      
+      this.room.setScenePath(newPath);
+    } catch (error) {
+      console.error('Error navigating to page:', error);
+    }
+  }
+
+  /**
+   * Get the current page number
+   */
+  getCurrentPage(): number {
+    if (!this.room) return 1;
+
+    try {
+      const currentPath = this.room.state.sceneState.scenePath;
+      const pathParts = currentPath.split('/');
+      const pageStr = pathParts[pathParts.length - 1];
+      return parseInt(pageStr, 10) || 1;
+    } catch (error) {
+      console.error('Error getting current page:', error);
+      return 1;
+    }
+  }
+
+  /**
+   * Get the total number of pages in the current document
+   */
+  getTotalPages(): number {
+    if (!this.room) return 0;
+
+    try {
+      const scenes = this.room.state.sceneState.scenes;
+      return scenes.length;
+    } catch (error) {
+      console.error('Error getting total pages:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Clean up resources
    */
-  destroy(): void {
-    if (this.room) {
-      this.leaveRoom();
+  async destroy(): Promise<void> {
+    console.log('Destroying whiteboard service...');
+    
+    try {
+      if (this.room) {
+        await this.leaveRoom();
+      }
+    } catch (error) {
+      console.error('Error during whiteboard destroy:', error);
     }
+    
+    // Clear all references
     this.whiteWebSdk = null;
+    this.room = null;
+    this.config = null;
     this.onStateChangeCallback = null;
     this.onPhaseChangeCallback = null;
+    
+    console.log('Whiteboard service destroyed');
   }
 }
 

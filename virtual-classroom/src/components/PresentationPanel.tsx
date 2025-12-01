@@ -2,16 +2,17 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import type { PresentationMode, WhiteboardConfig } from '../types';
 import type { ILocalVideoTrack } from 'agora-rtc-sdk-ng';
 import PresentationContainer from './PresentationContainer';
-import AnnotationToolbar from './AnnotationToolbar';
 import TopToolbar from './TopToolbar';
 import { ScreenShareService } from '../services/ScreenShareService';
 import { createWhiteboardRoom } from '../utils/whiteboardTokens';
-import { useAnnotations } from '../hooks/useAnnotations';
 import { useToast } from '../contexts/ToastContext';
-import { annotationStorageService } from '../services/AnnotationStorageService';
+import { getPresentationModeManager } from '../services/PresentationModeManager';
+import DocumentUpload from './DocumentUpload';
+import whiteboardService from '../services/WhiteboardService';
+import type { ConvertedDocument } from '../services/DocumentConversionService';
+import documentManagementService from '../services/DocumentManagementService';
 
 // Lazy load heavy components
-const PDFViewerWithAnnotations = lazy(() => import('./PDFViewerWithAnnotations'));
 const ScreenShareDisplay = lazy(() => import('./ScreenShareDisplay'));
 const Whiteboard = lazy(() => import('./Whiteboard'));
 
@@ -29,18 +30,10 @@ function HeavyComponentLoader() {
 
 export default function PresentationPanel() {
   const { showToast } = useToast();
+  const modeManager = useRef(getPresentationModeManager());
   
   // Presentation mode state
-  const [mode, setMode] = useState<PresentationMode>('pdf');
-  
-  // PDF state
-  const [pdfUrl, setPdfUrl] = useState<string>('https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf');
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(0);
-  const [zoom, setZoom] = useState<number>(1.2);
-  const [documentId, setDocumentId] = useState<string>('');
-  const [isUploadingPDF, setIsUploadingPDF] = useState<boolean>(false);
+  const [mode, setMode] = useState<PresentationMode>(modeManager.current.getCurrentMode());
   
   // Screen share state
   const [screenTrack, setScreenTrack] = useState<ILocalVideoTrack | null>(null);
@@ -49,39 +42,67 @@ export default function PresentationPanel() {
   // Whiteboard state
   const [whiteboardConfig, setWhiteboardConfig] = useState<WhiteboardConfig | null>(null);
   const [isLoadingWhiteboard, setIsLoadingWhiteboard] = useState(false);
+  const [currentDocument, setCurrentDocument] = useState<ConvertedDocument | null>(null);
+  const [documentPage, setDocumentPage] = useState(1);
+  const [documentTotalPages, setDocumentTotalPages] = useState(0);
+  const [availableDocuments, setAvailableDocuments] = useState<ConvertedDocument[]>([]);
+  const [showDocumentList, setShowDocumentList] = useState(false);
+  const sessionId = useRef('session-' + Date.now());
   
   const screenShareServiceRef = useRef<ScreenShareService | null>(null);
-  const pdfViewerRef = useRef<any>(null);
-
-  // Annotation state - only enabled for PDF and screen share modes
-  const enableAnnotations = mode === 'pdf' || mode === 'screenshare';
-  
-  const {
-    currentTool,
-    currentColor,
-    strokeWidth,
-    changeTool,
-    changeColor,
-    changeStrokeWidth,
-    clearAnnotations,
-  } = useAnnotations({
-    enabled: enableAnnotations,
-  });
 
   useEffect(() => {
     // Initialize screen share service
     screenShareServiceRef.current = new ScreenShareService();
+
+    // Load available documents for this session
+    const documents = documentManagementService.getDocuments(sessionId.current);
+    setAvailableDocuments(documents);
+
+    // Subscribe to mode changes from the manager
+    const unsubscribe = modeManager.current.onModeChange((newMode) => {
+      setMode(newMode);
+      
+      // Restore state when mode changes
+      if (newMode === 'screenshare') {
+        const screenShareState = modeManager.current.restoreScreenShareState();
+        if (screenShareState) {
+          setIsScreenSharing(screenShareState.isActive);
+        }
+      } else if (newMode === 'whiteboard' && !whiteboardConfig) {
+        // Auto-initialize whiteboard when switching to it
+        initializeWhiteboard();
+      }
+    });
 
     return () => {
       // Cleanup on unmount
       if (screenShareServiceRef.current) {
         screenShareServiceRef.current.cleanup();
       }
+      unsubscribe();
     };
-  }, []);
+  }, [whiteboardConfig]);
 
   const handleModeChange = async (newMode: PresentationMode) => {
-    setMode(newMode);
+    // Preserve current mode state before switching
+    if (mode === 'whiteboard') {
+      modeManager.current.preserveWhiteboardState({
+        canUndo: false,
+        canRedo: false
+      });
+    } else if (mode === 'screenshare') {
+      modeManager.current.preserveScreenShareState({
+        isActive: isScreenSharing
+      });
+    }
+    
+    // Switch mode using the manager
+    await modeManager.current.switchMode(newMode, {
+      animate: true,
+      preserveState: true,
+      reason: 'user'
+    });
     
     // If switching away from screen share, stop sharing
     if (mode === 'screenshare' && newMode !== 'screenshare' && isScreenSharing) {
@@ -115,12 +136,93 @@ export default function PresentationPanel() {
         userRole,
       };
       
+      console.log('Whiteboard config created:', { 
+        appId: config.appId, 
+        roomId: config.roomId, 
+        hasToken: !!config.roomToken 
+      });
+      
       setWhiteboardConfig(config);
+      showToast('Whiteboard initialized successfully', 'success');
     } catch (error) {
       console.error('Failed to initialize whiteboard:', error);
+      showToast('Failed to initialize whiteboard. Make sure the backend is running.', 'error');
     } finally {
       setIsLoadingWhiteboard(false);
     }
+  };
+
+  /**
+   * Handle document conversion completion
+   */
+  const handleDocumentConverted = async (document: ConvertedDocument) => {
+    try {
+      console.log('Document converted successfully:', document);
+      
+      // Save document to storage
+      documentManagementService.addDocument(sessionId.current, document);
+      
+      // Update available documents list
+      const documents = documentManagementService.getDocuments(sessionId.current);
+      setAvailableDocuments(documents);
+      
+      // Display the document
+      await displayDocument(document);
+      
+      showToast(`Document "${document.resourceName}" loaded successfully`, 'success');
+    } catch (error) {
+      console.error('Failed to display document on whiteboard:', error);
+      showToast('Failed to display document on whiteboard', 'error');
+    }
+  };
+
+  /**
+   * Display a document on the whiteboard
+   */
+  const displayDocument = async (document: ConvertedDocument) => {
+    setCurrentDocument(document);
+    
+    try {
+      // Insert document into whiteboard
+      await whiteboardService.insertDocument(
+        document.taskUuid,
+        document.taskProgress,
+        document.conversion.type
+      );
+      
+      setDocumentPage(1);
+      setDocumentTotalPages(document.taskProgress.totalPageSize);
+    } catch (error) {
+      console.error('Error displaying document on whiteboard:', error);
+      // Still set the document so it can be viewed in other ways
+      setDocumentPage(1);
+      setDocumentTotalPages(document.taskProgress.totalPageSize);
+      throw error;
+    }
+  };
+
+  /**
+   * Switch to a different document
+   */
+  const handleSwitchDocument = async (document: ConvertedDocument) => {
+    try {
+      await displayDocument(document);
+      setShowDocumentList(false);
+      showToast(`Switched to "${document.resourceName}"`, 'success');
+    } catch (error) {
+      console.error('Failed to switch document:', error);
+      showToast('Failed to switch document', 'error');
+    }
+  };
+
+  /**
+   * Handle document page navigation
+   */
+  const handleDocumentPageChange = (page: number) => {
+    if (page < 1 || page > documentTotalPages) return;
+    
+    whiteboardService.goToPage(page);
+    setDocumentPage(page);
   };
 
   const handleStartScreenShare = async () => {
@@ -160,132 +262,12 @@ export default function PresentationPanel() {
     }
   };
 
-  /**
-   * Handle PDF file upload with validation
-   */
-  const handlePDFUpload = async (file: File) => {
-    // Validate file type (must be application/pdf)
-    if (file.type !== 'application/pdf') {
-      showToast('Invalid file type. Please upload a PDF file.', 'error');
-      return;
-    }
 
-    // Validate file size (max 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB in bytes
-    if (file.size > maxSize) {
-      showToast('File size exceeds 50MB limit. Please upload a smaller file.', 'error');
-      return;
-    }
-
-    // Set loading state
-    setIsUploadingPDF(true);
-
-    try {
-      // Simulate processing time for visual feedback (minimum 300ms)
-      const startTime = Date.now();
-      
-      // Clear previous document annotations before loading new PDF
-      if (documentId) {
-        annotationStorageService.clearDocumentAnnotations(documentId);
-      }
-
-      // Generate new document ID for the uploaded PDF
-      const newDocumentId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-      setDocumentId(newDocumentId);
-
-      // Create object URL for the PDF
-      const url = URL.createObjectURL(file);
-      
-      // Ensure minimum loading time for smooth UX
-      const elapsed = Date.now() - startTime;
-      if (elapsed < 300) {
-        await new Promise(resolve => setTimeout(resolve, 300 - elapsed));
-      }
-      
-      setPdfUrl(url);
-      setUploadedFileName(file.name);
-      setCurrentPage(1); // Reset to first page
-      setZoom(1.2); // Reset zoom
-      
-      showToast('PDF uploaded successfully', 'success');
-    } catch (error) {
-      console.error('Error uploading PDF:', error);
-      showToast('Failed to upload PDF. Please try again.', 'error');
-    } finally {
-      setIsUploadingPDF(false);
-    }
-  };
-
-  /**
-   * Handle page change from TopToolbar
-   */
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  /**
-   * Handle zoom change from TopToolbar
-   */
-  const handleZoomChange = (newZoom: number) => {
-    setZoom(newZoom);
-  };
-
-  /**
-   * Handle document load callback from PDFViewerWithAnnotations
-   */
-  const handleDocumentLoad = (numPages: number) => {
-    setTotalPages(numPages);
-    console.log(`PDF loaded with ${numPages} pages`);
-  };
-
-  /**
-   * Handle page load callback from PDFViewerWithAnnotations
-   */
-  const handlePageLoad = (pageNumber: number, width: number, height: number) => {
-    console.log(`Page ${pageNumber} loaded: ${width}x${height}`);
-  };
 
   const renderContent = () => {
+    console.log('[PresentationPanel] renderContent - mode:', mode);
+    
     switch (mode) {
-      case 'pdf':
-        return (
-          <div className="relative h-full">
-            <Suspense fallback={<HeavyComponentLoader />}>
-              <PDFViewerWithAnnotations
-                ref={pdfViewerRef}
-                fileUrl={pdfUrl}
-                currentPage={currentPage}
-                zoom={zoom}
-                tool={currentTool}
-                color={currentColor}
-                strokeWidth={strokeWidth}
-                documentId={documentId}
-                onDocumentLoad={handleDocumentLoad}
-                onPageLoad={handlePageLoad}
-                onAnnotationsChange={(pageNumber, annotations) => {
-                  console.log(`Page ${pageNumber} annotations updated:`, annotations.length);
-                }}
-              />
-            </Suspense>
-            
-            {/* Annotation Toolbar - only show for PDF mode */}
-            <AnnotationToolbar
-              selectedTool={currentTool as any}
-              onToolChange={changeTool as any}
-              currentColor={currentColor}
-              onColorChange={changeColor}
-              strokeWidth={strokeWidth}
-              onStrokeWidthChange={changeStrokeWidth}
-              onClear={() => {
-                clearAnnotations();
-                if (pdfViewerRef.current) {
-                  pdfViewerRef.current.clearCurrentPageAnnotations();
-                }
-              }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-50"
-            />
-          </div>
-        );
       case 'screenshare':
         return (
           <div className="h-full flex flex-col">
@@ -293,7 +275,6 @@ export default function PresentationPanel() {
               <ScreenShareDisplay 
                 screenTrack={screenTrack} 
                 isLocal={true}
-                enableAnnotations={enableAnnotations}
               />
             </Suspense>
             
@@ -365,17 +346,130 @@ export default function PresentationPanel() {
         }
         
         return (
-          <Suspense fallback={<HeavyComponentLoader />}>
-            <Whiteboard
-              config={whiteboardConfig}
-              onError={(error) => console.error('Whiteboard error:', error)}
-            />
-          </Suspense>
+          <div className="h-full relative">
+            <Suspense fallback={<HeavyComponentLoader />}>
+              <Whiteboard
+                config={whiteboardConfig}
+                onError={(error) => {
+                  console.error('Whiteboard error:', error);
+                  showToast('Whiteboard connection failed', 'error');
+                }}
+                className="h-full"
+              />
+            </Suspense>
+            
+            {/* Document controls */}
+            <div className="absolute top-4 left-4 z-20 flex gap-2">
+              <DocumentUpload
+                onDocumentConverted={handleDocumentConverted}
+                onError={(error) => showToast(error, 'error')}
+              />
+              
+              {availableDocuments.length > 0 && (
+                <button
+                  onClick={() => setShowDocumentList(!showDocumentList)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-all duration-200 flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <span>Documents ({availableDocuments.length})</span>
+                </button>
+              )}
+            </div>
+            
+            {/* Document list dropdown */}
+            {showDocumentList && availableDocuments.length > 0 && (
+              <div className="absolute top-20 left-4 z-20 bg-white rounded-lg shadow-xl border border-gray-200 min-w-[300px] max-w-[400px] max-h-[400px] overflow-y-auto">
+                <div className="p-3 border-b border-gray-200">
+                  <h3 className="font-medium text-gray-900">Available Documents</h3>
+                </div>
+                <div className="p-2">
+                  {availableDocuments.map((doc) => (
+                    <button
+                      key={doc.resourceUuid}
+                      onClick={() => handleSwitchDocument(doc)}
+                      className={`w-full text-left p-3 rounded-lg hover:bg-gray-50 transition-colors ${
+                        currentDocument?.resourceUuid === doc.resourceUuid
+                          ? 'bg-yellow-50 border-2 border-yellow-500'
+                          : 'border-2 border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{doc.resourceName}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {doc.taskProgress.totalPageSize} pages • {doc.conversion.type}
+                          </p>
+                        </div>
+                        {currentDocument?.resourceUuid === doc.resourceUuid && (
+                          <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Document page navigation */}
+            {currentDocument && documentTotalPages > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-white rounded-lg shadow-lg px-4 py-2 flex items-center gap-3">
+                <button
+                  onClick={() => handleDocumentPageChange(documentPage - 1)}
+                  disabled={documentPage <= 1}
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                <span className="text-sm font-medium text-gray-700">
+                  Page {documentPage} / {documentTotalPages}
+                </span>
+                
+                <button
+                  onClick={() => handleDocumentPageChange(documentPage + 1)}
+                  disabled={documentPage >= documentTotalPages}
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            
+
+          </div>
         );
       default:
         return null;
     }
   };
+
+  const previousMode = modeManager.current.getPreviousMode();
+  const showPreviousModeIndicator = previousMode && previousMode !== mode;
 
   return (
     <PresentationContainer mode={mode} onModeChange={handleModeChange}>
@@ -384,19 +478,31 @@ export default function PresentationPanel() {
         <TopToolbar
           mode={mode}
           onModeChange={handleModeChange}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          zoom={zoom}
-          onZoomChange={handleZoomChange}
-          onPDFUpload={handlePDFUpload}
-          currentFileName={uploadedFileName}
-          isUploadingPDF={isUploadingPDF}
         />
         
         {/* Presentation Content */}
         <div className="flex-1 relative overflow-hidden">
           {renderContent()}
+          
+          {/* Previous mode indicator and return button */}
+          {showPreviousModeIndicator && (
+            <div className="absolute top-4 right-4 z-50">
+              <button
+                onClick={async () => {
+                  await modeManager.current.returnToPreviousMode();
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-300 flex items-center gap-2 group"
+                style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+              >
+                <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="text-sm font-medium">
+                  Return to {previousMode === 'ai-output' ? 'AI Output' : previousMode.toUpperCase()}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </PresentationContainer>

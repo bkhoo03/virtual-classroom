@@ -1,12 +1,20 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import type { MediaContent } from '../types/ai.types';
 
 interface MediaRendererProps {
   media: MediaContent;
   onShare?: (media: MediaContent) => void;
+  attribution?: {
+    photographer?: string;
+    photographerUrl?: string;
+    source?: string;
+    sourceUrl?: string;
+  };
 }
 
-function MediaRenderer({ media, onShare }: MediaRendererProps) {
+function MediaRenderer({ media, onShare, attribution }: MediaRendererProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const handleShare = () => {
     if (onShare) {
       onShare(media);
@@ -14,25 +22,31 @@ function MediaRenderer({ media, onShare }: MediaRendererProps) {
   };
 
   return (
-    <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-white">
-      {/* Media content */}
-      {media.type === 'image' ? (
-        <div className="relative">
-          <img
-            src={media.url}
-            alt={media.title || 'Image content'}
-            className="w-full h-auto object-cover"
-            loading="lazy"
-            decoding="async"
-            // Use thumbnail as placeholder if available
-            style={{
-              backgroundImage: media.thumbnail ? `url(${media.thumbnail})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
-        </div>
-      ) : media.type === 'video' ? (
+    <>
+      <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-white">
+        {/* Media content */}
+        {media.type === 'image' ? (
+          <div className="relative">
+            <button
+              onClick={() => setIsExpanded(true)}
+              className="w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <img
+                src={media.url}
+                alt={media.title || 'Image content'}
+                className="w-full h-auto object-cover hover:opacity-90 transition-opacity cursor-pointer"
+                loading="lazy"
+                decoding="async"
+                // Use thumbnail as placeholder if available
+                style={{
+                  backgroundImage: media.thumbnail ? `url(${media.thumbnail})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              />
+            </button>
+          </div>
+        ) : media.type === 'video' ? (
         <div className="relative bg-black">
           <video
             src={media.url}
@@ -55,6 +69,40 @@ function MediaRenderer({ media, onShare }: MediaRendererProps) {
           <p className="text-xs text-gray-600 mb-2">{media.description}</p>
         )}
         
+        {/* Attribution for Unsplash images */}
+        {attribution && (
+          <p className="text-xs text-gray-500 mb-2">
+            {attribution.photographer && attribution.photographerUrl ? (
+              <>
+                Photo by{' '}
+                <a
+                  href={attribution.photographerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#5C0099] hover:text-[#C86BFA] underline"
+                >
+                  {attribution.photographer}
+                </a>
+              </>
+            ) : attribution.photographer ? (
+              <>Photo by {attribution.photographer}</>
+            ) : null}
+            {attribution.source && attribution.sourceUrl && (
+              <>
+                {attribution.photographer && ' on '}
+                <a
+                  href={attribution.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#5C0099] hover:text-[#C86BFA] underline"
+                >
+                  {attribution.source}
+                </a>
+              </>
+            )}
+          </p>
+        )}
+        
         {onShare && (
           <button
             onClick={handleShare}
@@ -68,6 +116,23 @@ function MediaRenderer({ media, onShare }: MediaRendererProps) {
         )}
       </div>
     </div>
+
+      {/* Expanded Image Modal */}
+      {isExpanded && media.type === 'image' && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setIsExpanded(false)}
+        >
+          <div className="max-w-4xl max-h-full bg-white rounded-lg shadow-2xl p-2">
+            <img
+              src={media.url}
+              alt={media.title || 'Image content'}
+              className="max-w-full max-h-full object-contain rounded"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

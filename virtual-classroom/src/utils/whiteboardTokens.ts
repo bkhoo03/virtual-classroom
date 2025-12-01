@@ -32,27 +32,48 @@ export async function generateWhiteboardToken(
 
 /**
  * Create a new whiteboard room
- * In production, this should call your backend API
+ * Calls the backend API which creates a room via Netless REST API
+ * Returns the actual Netless room UUID and a valid room token
  */
 export async function createWhiteboardRoom(sessionId: string): Promise<{
   roomId: string;
   roomToken: string;
 }> {
   try {
+    console.log('Creating whiteboard room for session:', sessionId);
+    
     const response = await apiClient.post('/api/tokens/whiteboard', {
       roomId: sessionId,
+      role: 'admin'
     });
 
-    return {
-      roomId: sessionId,
-      roomToken: response.data.token,
-    };
-  } catch (error) {
-    console.error('Failed to create whiteboard room:', error);
+    // The backend now returns the actual Netless room UUID
+    const { token, roomId } = response.data;
     
-    // For development/testing, return mock data
+    console.log('Whiteboard room created:', { roomId, hasToken: !!token });
+
+    return {
+      roomId: roomId, // Use the UUID returned by the backend
+      roomToken: token,
+    };
+  } catch (error: any) {
+    console.error('Failed to create whiteboard room:', error);
+    console.error('Error details:', {
+      status: error?.response?.status,
+      message: error?.response?.data?.message || error?.message,
+      url: error?.config?.url
+    });
+    
+    // Check if it's an auth error
+    if (error?.response?.status === 401) {
+      console.error('Authentication required - please log in first');
+    }
+    
+    // For development/testing without backend, return mock data
+    // Note: This won't work with the real Netless SDK
     if (import.meta.env.DEV) {
-      console.warn('Using mock whiteboard room for development');
+      console.warn('Using mock whiteboard room for development - whiteboard will not work without backend');
+      console.warn('Make sure you are logged in and the backend is running on port 3001');
       return {
         roomId: 'mock_room_' + sessionId,
         roomToken: 'MOCK_ROOM_TOKEN_' + Date.now(),

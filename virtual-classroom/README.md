@@ -77,7 +77,8 @@ See **[START_HERE.md](START_HERE.md)** for detailed setup instructions.
 - Node.js 18+ and npm
 - Agora account and App ID ([Sign up](https://console.agora.io/))
 - Agora Whiteboard App ID ([Sign up](https://sso.shengwang.cn/signup))
-- Doubao API key
+- OpenAI API key (for ChatGPT, DALL-E, and multimodal features)
+- (Optional) Ngrok for remote testing and collaboration
 
 ### Installation
 
@@ -117,6 +118,30 @@ Preview production build:
 ```bash
 npm run preview
 ```
+
+### Remote Testing with Ngrok
+
+To test your application remotely or collaborate with others:
+
+1. **Install ngrok:**
+   ```bash
+   brew install ngrok/ngrok/ngrok
+   ngrok config add-authtoken YOUR_TOKEN
+   ```
+
+2. **Start backend tunnel:**
+   ```bash
+   ./start-ngrok-backend.sh
+   ```
+   Copy the HTTPS URL and add it to `.env` as `VITE_BACKEND_URL`
+
+3. **Start frontend tunnel:**
+   ```bash
+   ./start-ngrok-frontend.sh
+   ```
+   Share the HTTPS URL with colleagues!
+
+See **[NGROK_QUICK_START.md](NGROK_QUICK_START.md)** for detailed instructions.
 
 ## Project Structure
 

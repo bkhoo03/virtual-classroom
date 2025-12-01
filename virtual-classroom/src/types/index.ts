@@ -6,7 +6,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'rec
 
 export type ConnectionQuality = 'excellent' | 'good' | 'poor' | 'bad';
 
-export type PresentationMode = 'pdf' | 'screenshare' | 'whiteboard';
+export type PresentationMode = 'pdf' | 'screenshare' | 'whiteboard' | 'ai-output';
 
 export type SessionStatus = 'scheduled' | 'active' | 'completed' | 'cancelled';
 
@@ -79,6 +79,3 @@ export * from './ai.types';
 
 // Re-export toast types
 export * from './toast.types';
-
-// Re-export annotation storage types
-export * from './annotation-storage.types';

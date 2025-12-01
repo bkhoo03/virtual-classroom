@@ -5,15 +5,20 @@ interface ReconnectionNotificationProps {
   reconnectAttempt: number;
   maxAttempts: number;
   onManualReconnect?: () => void;
+  showRecoveryNotification?: boolean;
+  onDismissRecovery?: () => void;
 }
 
 export default function ReconnectionNotification({
   isReconnecting,
   reconnectAttempt,
   maxAttempts,
-  onManualReconnect
+  onManualReconnect,
+  showRecoveryNotification = false,
+  onDismissRecovery
 }: ReconnectionNotificationProps) {
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   useEffect(() => {
     if (!isReconnecting) {
@@ -27,6 +32,83 @@ export default function ReconnectionNotification({
 
     return () => clearInterval(interval);
   }, [isReconnecting]);
+
+  // Show recovery notification when reconnection succeeds
+  useEffect(() => {
+    if (showRecoveryNotification) {
+      setShowRecovery(true);
+      // Auto-dismiss after 5 seconds
+      const timer = setTimeout(() => {
+        setShowRecovery(false);
+        if (onDismissRecovery) {
+          onDismissRecovery();
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showRecoveryNotification, onDismissRecovery]);
+
+  // Show recovery notification
+  if (showRecovery) {
+    return (
+      <div 
+        className="fixed bottom-20 right-4 w-80 bg-white rounded-lg shadow-xl border-l-4 border-green-500 p-3 animate-slide-in z-40"
+        role="alert"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div className="flex items-start gap-3">
+          {/* Success Icon */}
+          <div className="flex-shrink-0">
+            <svg
+              className="w-6 h-6 text-green-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Connection Restored
+            </h3>
+            <p className="text-xs text-gray-600 mt-1">
+              Successfully reconnected to the classroom
+            </p>
+          </div>
+
+          {/* Close button */}
+          <button
+            onClick={() => {
+              setShowRecovery(false);
+              if (onDismissRecovery) {
+                onDismissRecovery();
+              }
+            }}
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Close notification"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!isReconnecting) return null;
 

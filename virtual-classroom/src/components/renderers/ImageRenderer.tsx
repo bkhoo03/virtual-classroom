@@ -4,9 +4,15 @@ interface ImageRendererProps {
   src: string;
   alt?: string;
   title?: string;
+  attribution?: {
+    photographer?: string;
+    photographerUrl?: string;
+    source?: string;
+    sourceUrl?: string;
+  };
 }
 
-export default function ImageRenderer({ src, alt, title }: ImageRendererProps) {
+export default function ImageRenderer({ src, alt, title, attribution }: ImageRendererProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -61,6 +67,40 @@ export default function ImageRenderer({ src, alt, title }: ImageRendererProps) {
           }}
         />
       </div>
+      {attribution && (
+        <div className="px-4 py-2 border-t border-gray-200 bg-white">
+          <p className="text-xs text-gray-600">
+            {attribution.photographer && attribution.photographerUrl ? (
+              <>
+                Photo by{' '}
+                <a
+                  href={attribution.photographerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-600 hover:text-purple-700 underline"
+                >
+                  {attribution.photographer}
+                </a>
+              </>
+            ) : attribution.photographer ? (
+              <>Photo by {attribution.photographer}</>
+            ) : null}
+            {attribution.source && attribution.sourceUrl && (
+              <>
+                {attribution.photographer && ' on '}
+                <a
+                  href={attribution.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-600 hover:text-purple-700 underline"
+                >
+                  {attribution.source}
+                </a>
+              </>
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

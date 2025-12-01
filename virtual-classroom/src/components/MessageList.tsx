@@ -34,6 +34,7 @@ const Message = memo(({ message, onMediaShare }: { message: AIMessage; onMediaSh
             <MediaRenderer 
               key={index} 
               media={media} 
+              attribution={media.attribution}
               onShare={onMediaShare}
             />
           ))}

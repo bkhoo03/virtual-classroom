@@ -12,7 +12,10 @@ interface EnvConfig {
   agoraAppId: string;
   agoraAppCertificate: string;
   agoraWhiteboardAppId: string;
+  agoraWhiteboardSdkToken: string;
   agoraWhiteboardAppSecret: string;
+  agoraWhiteboardAK: string;
+  agoraWhiteboardSK: string;
   doubaoApiKey: string;
   doubaoApiEndpoint: string;
   corsOrigin: string;
@@ -41,7 +44,10 @@ function validateEnv(): EnvConfig {
     agoraAppId: process.env.AGORA_APP_ID || '',
     agoraAppCertificate: process.env.AGORA_APP_CERTIFICATE || '',
     agoraWhiteboardAppId: process.env.AGORA_WHITEBOARD_APP_ID || '',
+    agoraWhiteboardSdkToken: process.env.AGORA_WHITEBOARD_SDK_TOKEN || '',
     agoraWhiteboardAppSecret: process.env.AGORA_WHITEBOARD_APP_SECRET || '',
+    agoraWhiteboardAK: process.env.AGORA_WHITEBOARD_AK || process.env.AGORA_WHITEBOARD_APP_ID || '',
+    agoraWhiteboardSK: process.env.AGORA_WHITEBOARD_SK || process.env.AGORA_WHITEBOARD_APP_SECRET || '',
     doubaoApiKey: process.env.DOUBAO_API_KEY || '',
     doubaoApiEndpoint: process.env.DOUBAO_API_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3',
     corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173'

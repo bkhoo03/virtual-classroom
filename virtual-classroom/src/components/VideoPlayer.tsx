@@ -1,4 +1,5 @@
 import { useEffect, useRef, memo } from 'react';
+import { MicOff, VideoOff, User } from 'lucide-react';
 import type { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
 
 interface VideoPlayerProps {
@@ -52,7 +53,7 @@ function VideoPlayer({
 
   return (
     <div 
-      className="relative w-full h-full bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl overflow-hidden"
+      className="relative w-full h-full bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-2xl overflow-hidden"
       role="region"
       aria-label={ariaLabel}
     >
@@ -67,7 +68,7 @@ function VideoPlayer({
       {/* Camera off overlay - AI-themed, compact */}
       {videoOff && (
         <div 
-          className="absolute inset-0 flex items-center justify-center overflow-hidden"
+          className="absolute inset-0 flex items-center justify-center overflow-hidden animate-fade-in"
           role="status"
           aria-label={`${userName}'s camera is off`}
         >
@@ -79,65 +80,71 @@ function VideoPlayer({
           </div>
           
           {/* Center content - subtle and elegant */}
-          <div className="relative text-center z-10">
-            {/* Glowing camera icon */}
+          <div className="relative text-center z-10 animate-scale-in">
+            {/* Glowing camera icon - BIGGER */}
             <div className="relative inline-block">
               {/* Glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#5C0099] to-[#C86BFA] rounded-full blur-md opacity-40 animate-pulse"></div>
-              {/* Icon container */}
-              <div className="relative w-16 h-16 bg-gradient-to-br from-[#5C0099] to-[#C86BFA] rounded-full flex items-center justify-center shadow-lg">
-                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-                </svg>
+              <div className="absolute inset-0 bg-gradient-to-br from-[#5C0099] to-[#C86BFA] rounded-full blur-xl opacity-40 animate-pulse"></div>
+              {/* Icon container - BIGGER */}
+              <div className="relative w-24 h-24 bg-gradient-to-br from-[#5C0099] to-[#C86BFA] rounded-full flex items-center justify-center shadow-lg">
+                <VideoOff className="w-12 h-12 text-white" />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Status indicators - Top right corner, outside overlay */}
+      {/* Status indicators - Top right corner with RED HALO glass effect - BIGGER */}
       {isLocal && (audioMuted || videoOff) && (
-        <div className="absolute top-2 right-2 flex gap-1 z-20" role="status" aria-live="polite">
-          {/* Microphone status */}
+        <div className="absolute top-3 right-3 flex gap-2 z-20 animate-fade-in" role="status" aria-live="polite">
+          {/* Microphone status - BIGGER with RED HALO */}
           {audioMuted && (
-            <div 
-              className="bg-red-500/90 backdrop-blur-sm p-1 rounded shadow-md"
-              aria-label="Microphone muted"
-              title="Microphone muted"
-            >
-              <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
-              </svg>
+            <div className="relative">
+              {/* Red glow halo */}
+              <div className="absolute inset-0 bg-red-500/30 rounded-xl blur-md animate-pulse" style={{ animationDuration: '2s' }}></div>
+              {/* Glass container with red tint */}
+              <div 
+                className="relative backdrop-blur-sm bg-red-500/20 p-3 rounded-xl shadow-lg border border-red-500/30 hover:scale-110 transition-transform duration-200"
+                style={{ boxShadow: '0 0 20px rgba(239, 68, 68, 0.3)' }}
+                aria-label="Microphone muted"
+                title="Microphone muted"
+              >
+                <MicOff className="w-6 h-6 text-red-400" aria-hidden="true" />
+              </div>
             </div>
           )}
           
-          {/* Video status */}
+          {/* Video status - BIGGER with RED HALO */}
           {videoOff && (
-            <div 
-              className="bg-red-500/90 backdrop-blur-sm p-1 rounded shadow-md"
-              aria-label="Camera off"
-              title="Camera off"
-            >
-              <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-              </svg>
+            <div className="relative">
+              {/* Red glow halo */}
+              <div className="absolute inset-0 bg-red-500/30 rounded-xl blur-md animate-pulse" style={{ animationDuration: '2s' }}></div>
+              {/* Glass container with red tint */}
+              <div 
+                className="relative backdrop-blur-sm bg-red-500/20 p-3 rounded-xl shadow-lg border border-red-500/30 hover:scale-110 transition-transform duration-200"
+                style={{ boxShadow: '0 0 20px rgba(239, 68, 68, 0.3)' }}
+                aria-label="Camera off"
+                title="Camera off"
+              >
+                <VideoOff className="w-6 h-6 text-red-400" aria-hidden="true" />
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Participant name overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+      {/* Participant name overlay with glass effect */}
+      <div className="absolute bottom-0 left-0 right-0 glass-dark border-t border-white/10 p-3 animate-fade-in">
         {/* Name and connection quality */}
         <div className="flex items-center justify-between">
           <span className="text-white text-sm font-medium">
             {userName} {isLocal && '(You)'}
           </span>
           
-          {/* Connection quality indicator - wifi signal */}
+          {/* Connection quality indicator - animated dot */}
           <div className="flex items-center gap-2">
             <div 
-              className={`w-2 h-2 rounded-full ${getQualityColor()} animate-pulse`}
+              className={`w-2.5 h-2.5 rounded-full ${getQualityColor()} animate-pulse shadow-lg`}
               role="status"
               aria-label={`Connection quality: ${connectionQuality}`}
               title={`Connection quality: ${connectionQuality}`}
@@ -148,12 +155,10 @@ function VideoPlayer({
 
       {/* Placeholder when no video track at all */}
       {!videoTrack && !videoOff && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-black">
-          <div className="text-center">
-            <div className="w-20 h-20 bg-[#5C0099] rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-              <span className="text-white text-3xl font-semibold">
-                {userName.charAt(0).toUpperCase()}
-              </span>
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-black animate-fade-in">
+          <div className="text-center animate-scale-in">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#5C0099] to-[#C86BFA] rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <User className="w-10 h-10 text-white" />
             </div>
             <span className="text-white/80 text-sm font-medium">{userName}</span>
           </div>

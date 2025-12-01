@@ -5,10 +5,19 @@ import {
   ImageRenderer,
   VideoRenderer,
   IframeRenderer,
+  SearchResultsRenderer,
 } from './renderers';
 import { aiOutputSyncService } from '../services/AIOutputSyncService';
 import type { SyncMessage } from '../services/AIOutputSyncService';
 import AIOutputSkeleton from './skeletons/AIOutputSkeleton';
+import AILoadingIndicator from './AILoadingIndicator';
+import MultimodalAIResponse from './MultimodalAIResponse';
+import { aiContentBroadcaster, type MultimodalAIContent } from '../services/AIContentBroadcaster';
+import { getTypographyClasses } from '../utils/designSystem';
+import { AIOutputHistoryManager } from '../services/AIOutputHistoryManager';
+import type { AIOutputEntry } from '../types/ai.types';
+import AICard, { AICardHeader, AICardTitle, AICardDescription, AICardContent } from './AICard';
+import { aiAnimationController } from '../utils/AIAnimationController';
 
 // ============================================================================
 // Type Definitions
@@ -16,7 +25,7 @@ import AIOutputSkeleton from './skeletons/AIOutputSkeleton';
 
 export interface AIOutputContent {
   id: string;
-  type: 'map' | 'chart' | 'image' | 'video' | 'iframe' | 'custom';
+  type: 'map' | 'chart' | 'image' | 'video' | 'iframe' | 'search-results' | 'custom';
   data: any;
   metadata: {
     title?: string;
@@ -43,9 +52,9 @@ interface AIOutputPanelProps {
 function EmptyState() {
   return (
     <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-      <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+      <div className="w-20 h-20 bg-gradient-to-br from-[#FFEE32]/20 to-[#FFD500]/20 rounded-full flex items-center justify-center mb-4 shadow-md">
         <svg 
-          className="w-10 h-10 text-purple-600" 
+          className="w-10 h-10 text-[#FDC500]" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -71,16 +80,119 @@ function EmptyState() {
 // Loading skeleton is now imported from separate component
 
 // ============================================================================
+// History Entry Component
+// ============================================================================
+
+interface HistoryEntryProps {
+  entry: AIOutputEntry;
+  showDebugInfo: boolean;
+  isNewest?: boolean;
+}
+
+function HistoryEntry({ entry, showDebugInfo, isNewest }: HistoryEntryProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Apply animations to new entries
+  useEffect(() => {
+    if (isNewest && cardRef.current) {
+      const animateEntry = async () => {
+        // First, fade in the card
+        await aiAnimationController.fadeInImage(cardRef.current!, { duration: 400 });
+        
+        // Then apply staggered animations to content elements if available
+        if (contentRef.current) {
+          const elements = Array.from(contentRef.current.querySelectorAll('.animate-stagger-item')) as HTMLElement[];
+          if (elements.length > 0) {
+            await aiAnimationController.staggerElements(elements, {
+              staggerDelay: 75,
+              duration: 300,
+            });
+          }
+        }
+      };
+      
+      animateEntry();
+    }
+  }, [isNewest]);
+  
+  // Format timestamp
+  const formatTimestamp = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (seconds < 60) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+  
+  return (
+    <div ref={cardRef} style={{ opacity: isNewest ? 0 : 1 }}>
+      <AICard variant="base" className="mb-4">
+        <AICardHeader>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <AICardTitle className="text-sm font-medium text-gray-700 mb-1">
+                {entry.userQuery}
+              </AICardTitle>
+              <AICardDescription className="text-xs text-gray-500">
+                {formatTimestamp(entry.timestamp)}
+              </AICardDescription>
+            </div>
+            {showDebugInfo && entry.processingTime && (
+              <span className="text-xs text-gray-400 ml-2">
+                {entry.processingTime}ms
+              </span>
+            )}
+          </div>
+        </AICardHeader>
+        
+        <div ref={contentRef}>
+          <AICardContent>
+            <MultimodalAIResponse
+              textResponse={entry.textResponse}
+              images={entry.images}
+              searchResults={entry.searchResults}
+              cost={undefined}
+              processingTime={entry.processingTime}
+              imageSource={entry.images.length > 0 ? 'unsplash' : 'none'}
+              showDebugInfo={false}
+            />
+          </AICardContent>
+        </div>
+      </AICard>
+    </div>
+  );
+}
+
+// ============================================================================
 // Main AIOutputPanel Component
 // ============================================================================
 
 export default function AIOutputPanel({ sessionId, role }: AIOutputPanelProps) {
   const [content, setContent] = useState<AIOutputContent | null>(null);
+  const [multimodalContent, setMultimodalContent] = useState<MultimodalAIContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSynced, setIsSynced] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const interactionUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // History management
+  const historyManagerRef = useRef<AIOutputHistoryManager | null>(null);
+  const [history, setHistory] = useState<AIOutputEntry[]>([]);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousHistoryLengthRef = useRef(0);
 
   // Handle content updates from WebSocket
   const handleContentUpdate = useCallback((message: SyncMessage) => {
@@ -136,20 +248,113 @@ export default function AIOutputPanel({ sessionId, role }: AIOutputPanelProps) {
     }
   }, []);
 
-  // Initialize WebSocket connection
+  // Initialize history manager
+  useEffect(() => {
+    if (!historyManagerRef.current) {
+      historyManagerRef.current = new AIOutputHistoryManager({
+        maxEntries: 50,
+        persistToSession: true,
+        autoScroll: true,
+      });
+      
+      // Load existing history
+      const existingHistory = historyManagerRef.current.getHistory();
+      setHistory(existingHistory);
+      previousHistoryLengthRef.current = existingHistory.length;
+    }
+    
+    // Clear history on session end
+    return () => {
+      if (historyManagerRef.current) {
+        historyManagerRef.current.clearHistory();
+      }
+    };
+  }, []);
+  
+  // Auto-scroll to top when new entry is added
+  useEffect(() => {
+    if (history.length > previousHistoryLengthRef.current && scrollContainerRef.current) {
+      // New entry added, scroll to top
+      if (historyManagerRef.current?.shouldAutoScroll()) {
+        const container = scrollContainerRef.current;
+        // Smooth scroll to top
+        container.scrollTo({
+          top: 0,
+          behavior: 'smooth',
+        });
+      }
+    }
+    previousHistoryLengthRef.current = history.length;
+  }, [history]);
+
+  // Subscribe to loading state
+  useEffect(() => {
+    console.log('🎧 AIOutputPanel subscribing to loading state');
+    const unsubscribe = aiContentBroadcaster.subscribeToLoading((loading) => {
+      console.log('⏳ AIOutputPanel loading state changed:', loading);
+      setIsLoading(loading);
+    });
+
+    return () => {
+      console.log('🔌 AIOutputPanel unsubscribing from loading state');
+      unsubscribe();
+    };
+  }, []);
+
+  // Subscribe to multimodal AI content
+  useEffect(() => {
+    console.log('🎧 AIOutputPanel subscribing to content broadcaster');
+    const unsubscribe = aiContentBroadcaster.subscribe((content) => {
+      console.log('📥 AIOutputPanel received multimodal content:', {
+        hasText: !!content.textResponse,
+        imageCount: content.images.length,
+        searchResultCount: content.searchResults.length,
+      });
+      setMultimodalContent(content);
+      
+      // Add to history
+      if (historyManagerRef.current && content.textResponse) {
+        const entry: AIOutputEntry = {
+          id: `entry-${Date.now()}`,
+          timestamp: new Date(),
+          userQuery: content.userQuery || 'User query',
+          textResponse: content.textResponse,
+          images: content.images,
+          searchResults: content.searchResults,
+          processingTime: content.processingTime || 0,
+        };
+        
+        historyManagerRef.current.addEntry(entry);
+        setHistory(historyManagerRef.current.getHistory());
+      }
+    });
+
+    // Get latest content if available
+    const latest = aiContentBroadcaster.getLatestContent();
+    if (latest) {
+      console.log('📦 AIOutputPanel loading cached content');
+      setMultimodalContent(latest);
+    }
+
+    return () => {
+      console.log('🔌 AIOutputPanel unsubscribing from content broadcaster');
+      unsubscribe();
+    };
+  }, []);
+
+  // Initialize WebSocket connection (for legacy content)
   useEffect(() => {
     console.log('AIOutputPanel initialized for session:', sessionId);
     
-    // Connect to WebSocket
+    // Connect to WebSocket (for legacy sync features, not required for AI output)
     aiOutputSyncService.connect(
       sessionId,
       `user-${Date.now()}`, // In production, use actual user ID
       (connected) => {
-        setIsConnected(connected);
+        // Connection status is not critical for AI output functionality
+        // AI content is delivered via aiContentBroadcaster
         if (!connected) {
-          setError('Connection lost. Attempting to reconnect...');
-        } else {
-          setError(null);
+          console.log('WebSocket sync service not connected (this is optional)');
         }
       }
     );
@@ -199,9 +404,35 @@ export default function AIOutputPanel({ sessionId, role }: AIOutputPanelProps) {
   // Render content based on state with fade transitions
   const renderContent = () => {
     if (isLoading) {
-      return <AIOutputSkeleton />;
+      return (
+        <div className="h-full flex items-center justify-center">
+          <AILoadingIndicator 
+            size="large" 
+            message="AI is generating your response..." 
+          />
+        </div>
+      );
     }
 
+    // Display history if available
+    if (history.length > 0) {
+      return (
+        <div className="h-full overflow-auto p-6" ref={scrollContainerRef}>
+          <div className="space-y-4">
+            {history.map((entry, index) => (
+              <HistoryEntry
+                key={entry.id}
+                entry={entry}
+                showDebugInfo={showDebugInfo}
+                isNewest={index === 0}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Fallback to legacy content display
     if (!content) {
       return <EmptyState />;
     }
@@ -219,6 +450,8 @@ export default function AIOutputPanel({ sessionId, role }: AIOutputPanelProps) {
           return <VideoRenderer src={content.data.url} title={content.data.title} autoplay={content.data.autoplay} />;
         case 'iframe':
           return <IframeRenderer src={content.data.url} title={content.data.title} allowFullscreen={content.data.allowFullscreen} />;
+        case 'search-results':
+          return <SearchResultsRenderer results={content.data.results} query={content.data.query} />;
         case 'custom':
           return (
             <div className="h-full flex items-center justify-center p-8">
@@ -252,44 +485,46 @@ export default function AIOutputPanel({ sessionId, role }: AIOutputPanelProps) {
   return (
     <div className="h-full flex flex-col bg-white" role="region" aria-label="AI Output Panel">
       {/* Header */}
-      <header className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      <header className="px-6 py-4 border-b border-[#FFD500]/20 flex items-center justify-between bg-gradient-to-r from-[#FFEE32]/5 to-white">
         <div className="flex-1 flex items-center gap-3">
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-gray-900" id="ai-output-title">
-              {content?.metadata.title || 'AI Output'}
+            <h3 className={`${getTypographyClasses('base', 'semibold')} text-gray-900`} id="ai-output-title">
+              {multimodalContent ? 'AI Response' : (content?.metadata.title || 'AI Output')}
             </h3>
-            {content?.metadata.description && (
-              <p className="text-xs text-gray-500 mt-0.5" id="ai-output-description">
+            {multimodalContent && multimodalContent.processingTime && (
+              <p className={`${getTypographyClasses('xs', 'normal')} text-gray-500 mt-1`} id="ai-output-description">
+                Processed in {multimodalContent.processingTime}ms
+              </p>
+            )}
+            {!multimodalContent && content?.metadata.description && (
+              <p className={`${getTypographyClasses('xs', 'normal')} text-gray-500 mt-1`} id="ai-output-description">
                 {content.metadata.description}
               </p>
             )}
           </div>
           
-          {/* Connection status indicator */}
-          <div 
-            className="flex items-center gap-1.5"
-            role="status"
-            aria-live="polite"
-            aria-label={isConnected ? 'Connected to server' : 'Disconnected from server'}
-          >
-            <div 
-              className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-              aria-hidden="true"
-            />
-            <span className="text-xs text-gray-500">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
+          {/* Debug toggle */}
+          {multimodalContent && multimodalContent.cost && (
+            <button
+              onClick={() => setShowDebugInfo(!showDebugInfo)}
+              className="p-1.5 rounded hover:bg-[#FFEE32]/30 transition-all duration-200"
+              title={showDebugInfo ? 'Hide debug info' : 'Show debug info'}
+            >
+              <svg className="w-4 h-4 text-[#FDC500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+          )}
         </div>
         
         {/* Sync toggle for tutees */}
         {role === 'tutee' && (
           <button
             onClick={() => setIsSynced(!isSynced)}
-            className={`ml-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+            className={`ml-3 px-3 py-2 rounded-lg ${getTypographyClasses('xs', 'medium')} transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-sm hover:shadow-md ${
               isSynced
-                ? 'bg-purple-100 text-purple-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-[#FDC500] text-gray-900 hover:bg-[#FFD500] focus:ring-[#FDC500]'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-400'
             }`}
             aria-label={isSynced ? 'Currently synced with tutor. Click to enable free exploration' : 'Currently in free exploration mode. Click to sync with tutor'}
             aria-pressed={isSynced}
