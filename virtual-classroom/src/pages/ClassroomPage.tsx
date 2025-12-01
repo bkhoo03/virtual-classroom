@@ -99,57 +99,30 @@ export default function ClassroomPage() {
 
   // Callbacks to sync video control states from VideoCallModule
   const handleVideoAudioChange = useCallback((muted: boolean) => {
-    if (!isUpdatingFromToolbar.current) {
-      setVideoAudioMuted(muted);
-    }
+    setVideoAudioMuted(muted);
   }, []);
 
   const handleVideoVideoChange = useCallback((off: boolean) => {
-    if (!isUpdatingFromToolbar.current) {
-      setVideoVideoOff(off);
-    }
+    setVideoVideoOff(off);
   }, []);
 
   // Set up keyboard shortcuts and get control state
   const {
-    isAudioMuted,
-    isVideoOff,
     presentationMode,
-    toggleAudio,
-    toggleVideo,
   } = useClassroomControls({
     onLeaveClassroom: handleLeaveClassroom,
     onToggleScreenShare: handleToggleScreenShare,
     onChangePresentationMode: handleChangePresentationMode,
   });
 
-  // Sync the context state to the video state when it changes
-  useEffect(() => {
-    setVideoAudioMuted(isAudioMuted);
-  }, [isAudioMuted]);
-
-  useEffect(() => {
-    setVideoVideoOff(isVideoOff);
-  }, [isVideoOff]);
-
-  // Wrap toolbar toggle functions to set the flag
+  // Toolbar toggle functions - directly toggle the video state
   const handleToolbarToggleAudio = useCallback(() => {
-    isUpdatingFromToolbar.current = true;
-    toggleAudio();
-    // Reset flag after a short delay
-    setTimeout(() => {
-      isUpdatingFromToolbar.current = false;
-    }, 100);
-  }, [toggleAudio]);
+    setVideoAudioMuted(prev => !prev);
+  }, []);
 
   const handleToolbarToggleVideo = useCallback(() => {
-    isUpdatingFromToolbar.current = true;
-    toggleVideo();
-    // Reset flag after a short delay
-    setTimeout(() => {
-      isUpdatingFromToolbar.current = false;
-    }, 100);
-  }, [toggleVideo]);
+    setVideoVideoOff(prev => !prev);
+  }, []);
 
   if (isLoading) {
     return (
@@ -209,8 +182,8 @@ export default function ClassroomPage() {
               userRole={userRole}
               onAudioChange={handleVideoAudioChange}
               onVideoChange={handleVideoVideoChange}
-              externalAudioMuted={isAudioMuted}
-              externalVideoOff={isVideoOff}
+              externalAudioMuted={videoAudioMuted}
+              externalVideoOff={videoVideoOff}
             />
           </Suspense>
         }
