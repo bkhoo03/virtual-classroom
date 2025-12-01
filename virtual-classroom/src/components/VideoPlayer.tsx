@@ -95,7 +95,7 @@ function VideoPlayer({
       )}
 
       {/* Status indicators - Top right corner with RED HALO glass effect - BIGGER */}
-      {isLocal && (audioMuted || videoOff) && (
+      {(audioMuted || videoOff) && (
         <div className="absolute top-3 right-3 flex gap-2 z-20 animate-fade-in" role="status" aria-live="polite">
           {/* Microphone status - BIGGER with RED HALO */}
           {audioMuted && (

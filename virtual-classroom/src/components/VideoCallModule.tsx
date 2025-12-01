@@ -469,6 +469,7 @@ export default function VideoCallModule({
                     userName="Tutee"
                     isLocal={false}
                     connectionQuality={connectionQuality}
+                    audioMuted={!remoteStream.audioTrack}
                     videoOff={!remoteStream.videoTrack}
                   />
                 );
@@ -522,6 +523,7 @@ export default function VideoCallModule({
                     userName="Tutor"
                     isLocal={false}
                     connectionQuality={connectionQuality}
+                    audioMuted={!remoteStream.audioTrack}
                     videoOff={!remoteStream.videoTrack}
                   />
                 );
