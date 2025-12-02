@@ -176,6 +176,40 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} left session: ${sessionId}`);
   });
   
+  // ===== CHAT EVENTS =====
+  
+  // Join a chat session
+  socket.on('join-chat-session', ({ sessionId, userId, userName }: { sessionId: string; userId: string; userName: string }) => {
+    socket.join(`chat:${sessionId}`);
+    console.log(`💬 Socket ${socket.id} (${userName}) joined chat session: ${sessionId}`);
+    
+    // Notify others that user joined
+    socket.to(`chat:${sessionId}`).emit('user-joined-chat', { userId, userName });
+  });
+  
+  // Send chat message
+  socket.on('send-chat-message', (message: any) => {
+    console.log(`💬 Chat message in session ${message.sessionId} from ${message.senderName}: ${message.content}`);
+    // Broadcast to all clients in the same session (including sender for confirmation)
+    io.to(`chat:${message.sessionId}`).emit('chat-message', message);
+  });
+  
+  // Typing indicator
+  socket.on('typing-indicator', ({ sessionId, userId, userName, isTyping }: { sessionId: string; userId: string; userName: string; isTyping: boolean }) => {
+    console.log(`💬 ${userName} is ${isTyping ? 'typing' : 'stopped typing'} in session ${sessionId}`);
+    // Broadcast to all other clients in the same session
+    socket.to(`chat:${sessionId}`).emit('user-typing', { userId, userName, isTyping });
+  });
+  
+  // Leave chat session
+  socket.on('leave-chat-session', ({ sessionId, userId }: { sessionId: string; userId: string }) => {
+    socket.leave(`chat:${sessionId}`);
+    console.log(`💬 Socket ${socket.id} left chat session: ${sessionId}`);
+    
+    // Notify others that user left
+    socket.to(`chat:${sessionId}`).emit('user-left-chat', { userId });
+  });
+  
   socket.on('disconnect', () => {
     console.log(`Socket disconnected: ${socket.id}`);
   });
@@ -209,9 +243,11 @@ httpServer.listen(PORT, () => {
 ║   - GET  /api/whiteboard/convert/:taskUuid                ║
 ║                                                           ║
 ║   Socket.IO Events:                                       ║
-║   - join-session                                          ║
+║   - join-session / leave-session                          ║
 ║   - pdf-page-change                                       ║
-║   - leave-session                                         ║
+║   - join-chat-session / leave-chat-session                ║
+║   - send-chat-message                                     ║
+║   - typing-indicator                                      ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);

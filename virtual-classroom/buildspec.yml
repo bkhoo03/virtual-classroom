@@ -1,0 +1,50 @@
+version: 0.2
+env:
+  parameter-store:
+    VITE_AGORA_APP_ID: "/virtual-classroom/agora_app_id"
+    VITE_AGORA_APP_CERTIFICATE: "/virtual-classroom/agora_app_certificate"
+    VITE_AGORA_WHITEBOARD_APP_ID: "/virtual-classroom/whiteboard_app_id"
+    VITE_AGORA_WHITEBOARD_SDK_TOKEN: "/virtual-classroom/whiteboard_sdk_token"
+    VITE_AGORA_WHITEBOARD_AK: "/virtual-classroom/whiteboard_ak"
+    VITE_AGORA_WHITEBOARD_SK: "/virtual-classroom/whiteboard_sk"
+    VITE_BACKEND_URL: "/virtual-classroom/backend_url"
+    VITE_OPENAI_API_KEY: "/virtual-classroom/openai_api_key"
+    JWT_SECRET: "/virtual-classroom/jwt_secret"
+    AGORA_APP_ID: "/virtual-classroom/agora_app_id"
+    AGORA_APP_CERTIFICATE: "/virtual-classroom/agora_app_certificate"
+    AGORA_WHITEBOARD_APP_ID: "/virtual-classroom/whiteboard_app_id"
+    AGORA_WHITEBOARD_SDK_TOKEN: "/virtual-classroom/whiteboard_sdk_token"
+    AGORA_WHITEBOARD_APP_SECRET: "/virtual-classroom/whiteboard_app_secret"
+    AGORA_WHITEBOARD_AK: "/virtual-classroom/whiteboard_ak"
+    AGORA_WHITEBOARD_SK: "/virtual-classroom/whiteboard_sk"
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - npm ci
+      - npm ci --prefix backend
+  pre_build:
+    commands:
+      - echo "Running linting and tests..."
+      - npm run lint
+      - npm run test:coverage
+  build:
+    commands:
+      - echo "Building frontend..."
+      - npm run build
+      - echo "Building backend..."
+      - npm run build --prefix backend
+  post_build:
+    commands:
+      - echo "Build completed successfully"
+artifacts:
+  files:
+    - 'dist/**/*'
+    - 'backend/dist/**/*'
+    - 'coverage/**/*'
+  discard-paths: no
+cache:
+  paths:
+    - node_modules/**/*
+    - backend/node_modules/**/*

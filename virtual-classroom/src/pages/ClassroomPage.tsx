@@ -162,7 +162,11 @@ export default function ClassroomPage() {
       <ClassroomLayout
         chatPanel={
           <Suspense fallback={<ChatSkeleton />}>
-            <Chat sessionId={sessionId} />
+            <Chat 
+              sessionId={sessionId} 
+              userId={userId}
+              userName={userName}
+            />
           </Suspense>
         }
         aiOutputPanel={

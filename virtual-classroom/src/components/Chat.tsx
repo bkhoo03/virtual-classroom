@@ -5,9 +5,12 @@ import type { AIMessage, AIError } from '../types/ai.types';
 import { useToast } from '../contexts/ToastContext';
 import MediaRenderer from './MediaRenderer';
 import { aiContentBroadcaster } from '../services/AIContentBroadcaster';
+import { chatSyncService, type ChatMessage } from '../services/ChatSyncService';
 
 interface ChatProps {
   sessionId?: string;
+  userId?: string;
+  userName?: string;
   onMediaShare?: (media: any) => void;
   isCollapsed?: boolean;
   onUnreadCountChange?: (count: number) => void;
@@ -37,7 +40,7 @@ const formatDate = (date: Date) => {
   }
 };
 
-export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountChange }: ChatProps) {
+export default function Chat({ sessionId, userId, userName, onMediaShare, isCollapsed = false, onUnreadCountChange }: ChatProps) {
   const { showToast } = useToast();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -46,9 +49,11 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
   const [isAIEnabled, setIsAIEnabled] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessagesLengthRef = useRef(0);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize AI service
   useEffect(() => {
@@ -59,6 +64,50 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
       console.error('AI service not available:', err);
     }
   }, []);
+
+  // Initialize chat sync service
+  useEffect(() => {
+    if (!sessionId || !userId || !userName) {
+      return;
+    }
+
+    // Join the chat session
+    chatSyncService.joinSession(sessionId, userId, userName);
+
+    // Subscribe to incoming messages
+    const unsubscribeMessages = chatSyncService.subscribeToMessages(sessionId, (message: ChatMessage) => {
+      // Convert ChatMessage to AIMessage format
+      const aiMessage: AIMessage = {
+        id: message.id,
+        role: 'user', // Peer messages are shown as user messages (not AI)
+        content: message.content,
+        timestamp: new Date(message.timestamp),
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      console.log('💬 Received peer message:', message);
+    });
+
+    // Subscribe to typing indicators
+    const unsubscribeTyping = chatSyncService.subscribeToTyping(sessionId, (userId: string, userName: string, isTyping: boolean) => {
+      setTypingUsers(prev => {
+        const newMap = new Map(prev);
+        if (isTyping) {
+          newMap.set(userId, userName);
+        } else {
+          newMap.delete(userId);
+        }
+        return newMap;
+      });
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeMessages();
+      unsubscribeTyping();
+      chatSyncService.leaveSession();
+    };
+  }, [sessionId, userId, userName]);
 
   // Track scroll position to determine if user is at bottom
   useEffect(() => {
@@ -128,6 +177,11 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
     };
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+
+    // Stop typing indicator
+    if (sessionId && userId && userName) {
+      chatSyncService.sendTypingIndicator(false);
+    }
 
     // If AI is enabled and available, get AI response
     if (isAIEnabled && aiService) {
@@ -249,8 +303,43 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
       } finally {
         setIsLoading(false);
       }
+    } else {
+      // Send peer-to-peer message via Socket.IO
+      if (sessionId && userId && userName) {
+        const chatMessage: ChatMessage = {
+          id: userMessage.id,
+          senderId: userId,
+          senderName: userName,
+          content: trimmedMessage,
+          timestamp: userMessage.timestamp,
+          sessionId: sessionId,
+        };
+        
+        chatSyncService.sendMessage(chatMessage);
+        console.log('💬 Sent peer message:', chatMessage);
+      }
     }
-  }, [inputMessage, isAIEnabled, aiService, showToast, messages]);
+  }, [inputMessage, isAIEnabled, aiService, showToast, messages, sessionId, userId, userName]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputMessage(e.target.value);
+    
+    // Send typing indicator (only for peer chat, not AI mode)
+    if (!isAIEnabled && sessionId && userId && userName && e.target.value.trim()) {
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Send typing indicator
+      chatSyncService.sendTypingIndicator(true);
+      
+      // Auto-stop typing after 2 seconds of no input
+      typingTimeoutRef.current = setTimeout(() => {
+        chatSyncService.sendTypingIndicator(false);
+      }, 2000);
+    }
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -366,6 +455,24 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
             </div>
           );
         })}
+
+        {/* Typing indicator for peer users */}
+        {typingUsers.size > 0 && !isAIEnabled && (
+          <div className="flex justify-start animate-fade-in" role="status" aria-live="polite">
+            <div className="glass rounded-2xl px-4 py-3 shadow-lg max-w-[75%]">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span className="text-xs text-gray-600">
+                  {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex justify-center py-4 animate-fade-in" role="status" aria-live="polite" aria-label="AI is thinking">
@@ -514,7 +621,7 @@ export default function Chat({ onMediaShare, isCollapsed = false, onUnreadCountC
             id="chat-input"
             type="text"
             value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={handleKeyPress}
             placeholder={isAIEnabled ? "Ask AI anything..." : "Type a message or ask AI..."}
             disabled={isLoading}
