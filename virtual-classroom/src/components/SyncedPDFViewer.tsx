@@ -34,14 +34,17 @@ export default function SyncedPDFViewer({
   }, [externalPage]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    console.log('📄 [PDF] Document loaded successfully:', { numPages, pdfUrl });
     setNumPages(numPages);
     setLoading(false);
     setError(null);
   };
 
   const onDocumentLoadError = (error: Error) => {
-    console.error('Error loading PDF:', error);
-    setError('Failed to load PDF document');
+    console.error('📄 [PDF] Error loading document:', error);
+    console.error('📄 [PDF] PDF URL:', pdfUrl);
+    console.error('📄 [PDF] Worker src:', pdfjs.GlobalWorkerOptions.workerSrc);
+    setError(`Failed to load PDF: ${error.message}`);
     setLoading(false);
   };
 

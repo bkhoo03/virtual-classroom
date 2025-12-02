@@ -1,7 +1,8 @@
+import { io, Socket } from 'socket.io-client';
+
 /**
  * PDFSyncService handles synchronization of PDF page changes across users
- * Uses localStorage for simple cross-tab communication
- * Can be enhanced with WebSocket/Socket.IO for real-time sync
+ * Uses Socket.IO for real-time WebSocket communication
  */
 
 type PDFSyncCallback = (page: number, pdfUrl: string) => void;
@@ -9,19 +10,80 @@ type PDFSyncCallback = (page: number, pdfUrl: string) => void;
 class PDFSyncService {
   private callbacks: Map<string, PDFSyncCallback[]> = new Map();
   private currentPage: Map<string, number> = new Map();
-  private storageKey = 'pdf_sync_state';
+  private socket: Socket | null = null;
+  private currentSessionId: string | null = null;
 
   constructor() {
-    // Listen for storage events (cross-tab communication)
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', this.handleStorageChange);
-    }
+    this.initializeSocket();
+  }
+
+  /**
+   * Initialize Socket.IO connection
+   */
+  private initializeSocket(): void {
+    // Get backend URL from environment or use default
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    
+    this.socket = io(backendUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+
+    this.socket.on('connect', () => {
+      console.log('📡 [PDFSync] Connected to WebSocket server');
+      // Rejoin session if we were in one
+      if (this.currentSessionId) {
+        this.socket?.emit('join-session', this.currentSessionId);
+      }
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('📡 [PDFSync] Disconnected from WebSocket server');
+    });
+
+    this.socket.on('pdf-page-changed', ({ pdfUrl, page }: { pdfUrl: string; page: number }) => {
+      console.log('📡 [PDFSync] Received page change:', { pdfUrl, page });
+      
+      // Update local state
+      if (this.currentSessionId) {
+        const key = `${this.currentSessionId}:${pdfUrl}`;
+        this.currentPage.set(key, page);
+
+        // Notify subscribers
+        const callbacks = this.callbacks.get(this.currentSessionId);
+        if (callbacks) {
+          callbacks.forEach(callback => {
+            try {
+              callback(page, pdfUrl);
+            } catch (error) {
+              console.error('Error in PDF sync callback:', error);
+            }
+          });
+        }
+      }
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('📡 [PDFSync] Connection error:', error);
+    });
   }
 
   /**
    * Subscribe to PDF page changes for a specific session
    */
   subscribe(sessionId: string, callback: PDFSyncCallback): () => void {
+    // Join the session room
+    if (this.currentSessionId !== sessionId) {
+      if (this.currentSessionId) {
+        this.socket?.emit('leave-session', this.currentSessionId);
+      }
+      this.currentSessionId = sessionId;
+      this.socket?.emit('join-session', sessionId);
+      console.log('📡 [PDFSync] Joined session:', sessionId);
+    }
+
     if (!this.callbacks.has(sessionId)) {
       this.callbacks.set(sessionId, []);
     }
@@ -47,29 +109,12 @@ class PDFSyncService {
     const key = `${sessionId}:${pdfUrl}`;
     this.currentPage.set(key, page);
 
-    // Store in localStorage for cross-tab sync
-    try {
-      const syncState = {
-        sessionId,
-        pdfUrl,
-        page,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem(this.storageKey, JSON.stringify(syncState));
-    } catch (error) {
-      console.error('Failed to sync PDF page to localStorage:', error);
-    }
-
-    // Notify all subscribers for this session
-    const callbacks = this.callbacks.get(sessionId);
-    if (callbacks) {
-      callbacks.forEach(callback => {
-        try {
-          callback(page, pdfUrl);
-        } catch (error) {
-          console.error('Error in PDF sync callback:', error);
-        }
-      });
+    // Emit page change via Socket.IO
+    if (this.socket?.connected) {
+      this.socket.emit('pdf-page-change', { sessionId, pdfUrl, page });
+      console.log('📡 [PDFSync] Sent page change:', { sessionId, pdfUrl, page });
+    } else {
+      console.warn('📡 [PDFSync] Socket not connected, cannot sync page change');
     }
   }
 
@@ -82,44 +127,13 @@ class PDFSyncService {
   }
 
   /**
-   * Handle storage changes from other tabs
-   */
-  private handleStorageChange = (event: StorageEvent) => {
-    if (event.key !== this.storageKey || !event.newValue) {
-      return;
-    }
-
-    try {
-      const syncState = JSON.parse(event.newValue);
-      const { sessionId, pdfUrl, page } = syncState;
-
-      // Update local state
-      const key = `${sessionId}:${pdfUrl}`;
-      this.currentPage.set(key, page);
-
-      // Notify subscribers
-      const callbacks = this.callbacks.get(sessionId);
-      if (callbacks) {
-        callbacks.forEach(callback => {
-          try {
-            callback(page, pdfUrl);
-          } catch (error) {
-            console.error('Error in PDF sync callback:', error);
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error parsing PDF sync state:', error);
-    }
-  };
-
-  /**
    * Clean up resources
    */
   destroy(): void {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('storage', this.handleStorageChange);
+    if (this.currentSessionId) {
+      this.socket?.emit('leave-session', this.currentSessionId);
     }
+    this.socket?.disconnect();
     this.callbacks.clear();
     this.currentPage.clear();
   }

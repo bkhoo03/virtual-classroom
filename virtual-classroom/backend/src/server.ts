@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config/env.js';
 import authRoutes from './routes/auth.js';
 import tokenRoutes from './routes/tokens.js';
@@ -14,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = createServer(app);
 
 // Middleware
 // CORS configuration with support for ngrok domains and Vercel
@@ -114,9 +117,73 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Initialize Socket.IO with CORS
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: (origin, callback) => {
+      // Same CORS logic as Express
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        config.corsOrigin
+      ];
+      
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      
+      const ngrokPatterns = [
+        /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/,
+        /^https:\/\/[a-z0-9-]+\.ngrok\.io$/,
+        /^https:\/\/[a-z0-9-]+\.ngrok\.app$/
+      ];
+      
+      if (ngrokPatterns.some(pattern => pattern.test(origin))) return callback(null, true);
+      
+      const vercelPatterns = [
+        /^https:\/\/virtual-classroom-[a-z0-9-]+\.vercel\.app$/,
+        /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+      ];
+      
+      if (vercelPatterns.some(pattern => pattern.test(origin))) return callback(null, true);
+      
+      callback(null, false);
+    },
+    credentials: true
+  }
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`Socket connected: ${socket.id}`);
+  
+  // Join a session room
+  socket.on('join-session', (sessionId: string) => {
+    socket.join(`session:${sessionId}`);
+    console.log(`Socket ${socket.id} joined session: ${sessionId}`);
+  });
+  
+  // PDF page change event
+  socket.on('pdf-page-change', ({ sessionId, pdfUrl, page }: { sessionId: string; pdfUrl: string; page: number }) => {
+    console.log(`PDF page change in session ${sessionId}: page ${page}`);
+    // Broadcast to all other clients in the same session
+    socket.to(`session:${sessionId}`).emit('pdf-page-changed', { pdfUrl, page });
+  });
+  
+  // Leave session
+  socket.on('leave-session', (sessionId: string) => {
+    socket.leave(`session:${sessionId}`);
+    console.log(`Socket ${socket.id} left session: ${sessionId}`);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log(`Socket disconnected: ${socket.id}`);
+  });
+});
+
 // Start server
 const PORT = config.port;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -125,6 +192,7 @@ app.listen(PORT, () => {
 ║   Environment: ${config.nodeEnv.padEnd(43)}║
 ║   Port: ${PORT.toString().padEnd(50)}║
 ║   CORS Origin: ${config.corsOrigin.padEnd(43)}║
+║   WebSocket: Enabled (Socket.IO)                          ║
 ║                                                           ║
 ║   API Endpoints:                                          ║
 ║   - POST /api/auth/login                                  ║
@@ -139,6 +207,11 @@ app.listen(PORT, () => {
 ║   - POST /api/upload/document                             ║
 ║   - POST /api/whiteboard/convert                          ║
 ║   - GET  /api/whiteboard/convert/:taskUuid                ║
+║                                                           ║
+║   Socket.IO Events:                                       ║
+║   - join-session                                          ║
+║   - pdf-page-change                                       ║
+║   - leave-session                                         ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
