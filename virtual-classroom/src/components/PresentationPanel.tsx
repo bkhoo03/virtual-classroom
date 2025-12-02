@@ -11,10 +11,12 @@ import DocumentUpload from './DocumentUpload';
 import whiteboardService from '../services/WhiteboardService';
 import type { ConvertedDocument } from '../services/DocumentConversionService';
 import documentManagementService from '../services/DocumentManagementService';
+import pdfSyncService from '../services/PDFSyncService';
 
 // Lazy load heavy components
 const ScreenShareDisplay = lazy(() => import('./ScreenShareDisplay'));
 const Whiteboard = lazy(() => import('./Whiteboard'));
+const SyncedPDFViewer = lazy(() => import('./SyncedPDFViewer'));
 
 // Loading fallback for heavy components
 function HeavyComponentLoader() {
@@ -58,6 +60,10 @@ export default function PresentationPanel({
   const [availableDocuments, setAvailableDocuments] = useState<ConvertedDocument[]>([]);
   const [showDocumentList, setShowDocumentList] = useState(false);
   
+  // PDF viewer state
+  const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [pdfPage, setPdfPage] = useState(1);
+  
   // Use the session ID from props, or fallback to a generated one
   const sessionId = useRef(propSessionId || 'session-' + Date.now());
   
@@ -86,6 +92,13 @@ export default function PresentationPanel({
         initializeWhiteboard();
       }
     });
+    
+    // Subscribe to PDF sync changes
+    const unsubscribePdfSync = pdfSyncService.subscribe(sessionId.current, (page, url) => {
+      if (url === pdfUrl) {
+        setPdfPage(page);
+      }
+    });
 
     return () => {
       // Cleanup on unmount
@@ -93,8 +106,9 @@ export default function PresentationPanel({
         screenShareServiceRef.current.cleanup();
       }
       unsubscribe();
+      unsubscribePdfSync();
     };
-  }, [whiteboardConfig]);
+  }, [whiteboardConfig, pdfUrl]);
 
   const handleModeChange = async (newMode: PresentationMode) => {
     // Preserve current mode state before switching
@@ -480,6 +494,66 @@ export default function PresentationPanel({
             )}
             
 
+          </div>
+        );
+      case 'pdf':
+        return (
+          <div className="h-full relative">
+            {pdfUrl ? (
+              <Suspense fallback={<HeavyComponentLoader />}>
+                <SyncedPDFViewer
+                  pdfUrl={pdfUrl}
+                  sessionId={sessionId.current}
+                  externalPage={pdfPage}
+                  onPageChange={(page) => {
+                    setPdfPage(page);
+                    pdfSyncService.updatePage(sessionId.current, pdfUrl, page);
+                  }}
+                  className="h-full"
+                />
+              </Suspense>
+            ) : (
+              <div className="h-full flex items-center justify-center bg-white">
+                <div className="text-center max-w-md px-6">
+                  <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    No PDF Loaded
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Upload a PDF file to view it here. This is a fallback viewer - for the best experience, use the Agora Whiteboard document viewer first.
+                  </p>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && file.type === 'application/pdf') {
+                        const url = URL.createObjectURL(file);
+                        setPdfUrl(url);
+                        setPdfPage(1);
+                        pdfSyncService.updatePage(sessionId.current, url, 1);
+                        showToast('PDF loaded successfully', 'success');
+                      } else {
+                        showToast('Please select a valid PDF file', 'error');
+                      }
+                    }}
+                    className="hidden"
+                    id="pdf-upload"
+                  />
+                  <label
+                    htmlFor="pdf-upload"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 hover:scale-105 transition-all duration-300 shadow-md cursor-pointer"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Upload PDF
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
         );
       default:
