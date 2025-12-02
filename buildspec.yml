@@ -22,15 +22,18 @@ phases:
     runtime-versions:
       nodejs: 20
     commands:
+      - cd virtual-classroom
       - npm ci
       - npm ci --prefix backend
   pre_build:
     commands:
+      - cd virtual-classroom
       - echo "Running linting and tests..."
       - npm run lint
       - npm run test:coverage
   build:
     commands:
+      - cd virtual-classroom
       - echo "Building frontend..."
       - npm run build
       - echo "Building backend..."
@@ -40,11 +43,11 @@ phases:
       - echo "Build completed successfully"
 artifacts:
   files:
-    - 'dist/**/*'
-    - 'backend/dist/**/*'
-    - 'coverage/**/*'
+    - 'virtual-classroom/dist/**/*'
+    - 'virtual-classroom/backend/dist/**/*'
+    - 'virtual-classroom/coverage/**/*'
   discard-paths: no
 cache:
   paths:
-    - node_modules/**/*
-    - backend/node_modules/**/*
+    - virtual-classroom/node_modules/**/*
+    - virtual-classroom/backend/node_modules/**/*
