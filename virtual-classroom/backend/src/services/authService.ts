@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { config } from '../config/env.js';
 
@@ -78,11 +78,11 @@ export class AuthService {
     };
 
     const accessToken = jwt.sign(payload, config.jwtSecret, {
-      expiresIn: config.jwtExpiresIn
+      expiresIn: config.jwtExpiresIn as any
     });
 
     const refreshToken = jwt.sign(payload, config.jwtSecret, {
-      expiresIn: config.jwtRefreshExpiresIn
+      expiresIn: config.jwtRefreshExpiresIn as any
     });
 
     // Calculate expiration time in seconds
@@ -130,7 +130,7 @@ export class AuthService {
       };
 
       const accessToken = jwt.sign(payload, config.jwtSecret, {
-        expiresIn: config.jwtExpiresIn
+        expiresIn: config.jwtExpiresIn as any
       });
 
       const expiresIn = this.parseExpirationTime(config.jwtExpiresIn);
