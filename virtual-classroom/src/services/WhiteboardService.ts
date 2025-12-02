@@ -85,7 +85,7 @@ class WhiteboardService {
         uid: config.userId,
         // Set user role permissions
         isWritable: config.userRole === 'admin' || config.userRole === 'writer',
-        disableNewPencil: false,
+        disableNewPencil: true, // IMPORTANT: Disable new pencil to prevent ghost tools
         floatBar: false, // Disable default toolbar, we'll use custom UI
         // Performance optimizations
         disableBezier: false, // Keep bezier curves for smooth drawing
@@ -103,9 +103,23 @@ class WhiteboardService {
 
       // Set up event listeners
       this.setupEventListeners();
-
+      
+      // Initialize the member state with default values to prevent ghost tools
+      // This must be done AFTER joining the room
+      room.setMemberState({
+        currentApplianceName: 'pencil' as any,
+        strokeColor: this.currentColor,
+        strokeWidth: this.currentStrokeWidth,
+      });
+      
       console.log('✅ [WhiteboardService] Successfully joined whiteboard room:', config.roomId);
       console.log('✅ [WhiteboardService] Room phase:', room.phase);
+      console.log('✅ [WhiteboardService] Initial state set:', {
+        tool: 'pencil',
+        color: this.currentColor,
+        width: this.currentStrokeWidth
+      });
+      
       return room;
     } catch (error) {
       console.error('Failed to join whiteboard room:', error);

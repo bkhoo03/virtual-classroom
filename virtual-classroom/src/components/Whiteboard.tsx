@@ -56,11 +56,9 @@ export default function Whiteboard({
   const handleConnected = useCallback((connectedRoom: Room) => {
     setRoom(connectedRoom);
     
-    // Set initial tool state with fixed medium stroke width
-    whiteboardService.setTool(selectedTool);
-    whiteboardService.setColor(selectedColor);
-    whiteboardService.setStrokeWidth(6); // Fixed medium width
-  }, [selectedTool, selectedColor]);
+    // Initial state is now set in WhiteboardService.joinRoom()
+    // No need to set it again here to avoid race conditions
+  }, []);
 
   const handleDisconnected = useCallback(() => {
     setRoom(null);
