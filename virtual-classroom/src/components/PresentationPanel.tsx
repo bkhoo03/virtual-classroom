@@ -28,7 +28,17 @@ function HeavyComponentLoader() {
   );
 }
 
-export default function PresentationPanel() {
+interface PresentationPanelProps {
+  sessionId?: string;
+  userId?: string;
+  userRole?: 'tutor' | 'tutee';
+}
+
+export default function PresentationPanel({ 
+  sessionId: propSessionId,
+  userId: propUserId,
+  userRole: propUserRole = 'tutee'
+}: PresentationPanelProps = {}) {
   const { showToast } = useToast();
   const modeManager = useRef(getPresentationModeManager());
   
@@ -47,7 +57,9 @@ export default function PresentationPanel() {
   const [documentTotalPages, setDocumentTotalPages] = useState(0);
   const [availableDocuments, setAvailableDocuments] = useState<ConvertedDocument[]>([]);
   const [showDocumentList, setShowDocumentList] = useState(false);
-  const sessionId = useRef('session-' + Date.now());
+  
+  // Use the session ID from props, or fallback to a generated one
+  const sessionId = useRef(propSessionId || 'session-' + Date.now());
   
   const screenShareServiceRef = useRef<ScreenShareService | null>(null);
 
@@ -118,15 +130,18 @@ export default function PresentationPanel() {
   const initializeWhiteboard = async () => {
     setIsLoadingWhiteboard(true);
     try {
-      // Get session ID from URL or context (for now, use a mock)
-      const sessionId = 'session-' + Date.now();
+      // Use the actual session ID from props
+      const currentSessionId = sessionId.current;
       
-      // Create whiteboard room
-      const { roomId, roomToken } = await createWhiteboardRoom(sessionId);
+      console.log('🎨 [Whiteboard] Initializing whiteboard for session:', currentSessionId);
       
-      // Get user info (should come from auth context in production)
-      const userId = 'user-' + Math.floor(Math.random() * 10000);
-      const userRole = 'admin'; // Tutor should be admin, tutee should be writer
+      // Create whiteboard room using the session ID
+      const { roomId, roomToken } = await createWhiteboardRoom(currentSessionId);
+      
+      // Get user info from props or generate fallback
+      const userId = propUserId || 'user-' + Math.floor(Math.random() * 10000);
+      // Map tutor to admin, tutee to writer
+      const userRole = propUserRole === 'tutor' ? 'admin' : 'writer';
       
       const config: WhiteboardConfig = {
         appId: import.meta.env.VITE_AGORA_WHITEBOARD_APP_ID || '',
@@ -136,16 +151,20 @@ export default function PresentationPanel() {
         userRole,
       };
       
-      console.log('Whiteboard config created:', { 
+      console.log('🎨 [Whiteboard] Config created:', { 
         appId: config.appId, 
         roomId: config.roomId, 
+        userId: config.userId,
+        userRole: config.userRole,
+        sessionId: currentSessionId,
         hasToken: !!config.roomToken 
       });
+      console.log('🎨 [Whiteboard] All users in session', currentSessionId, 'should join room:', roomId);
       
       setWhiteboardConfig(config);
       showToast('Whiteboard initialized successfully', 'success');
     } catch (error) {
-      console.error('Failed to initialize whiteboard:', error);
+      console.error('❌ [Whiteboard] Failed to initialize:', error);
       showToast('Failed to initialize whiteboard. Make sure the backend is running.', 'error');
     } finally {
       setIsLoadingWhiteboard(false);

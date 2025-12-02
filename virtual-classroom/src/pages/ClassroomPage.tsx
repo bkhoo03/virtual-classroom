@@ -189,7 +189,11 @@ export default function ClassroomPage() {
         }
         presentationPanel={
           <Suspense fallback={<PresentationSkeleton />}>
-            <PresentationPanel />
+            <PresentationPanel 
+              sessionId={sessionId}
+              userId={userId}
+              userRole={userRole as 'tutor' | 'tutee'}
+            />
           </Suspense>
         }
       />

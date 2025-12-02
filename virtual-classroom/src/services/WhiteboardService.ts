@@ -68,7 +68,7 @@ class WhiteboardService {
     try {
       this.config = config;
 
-      console.log('Joining whiteboard room:', {
+      console.log('🎨 [WhiteboardService] Joining whiteboard room:', {
         roomId: config.roomId,
         userId: config.userId,
         userRole: config.userRole
@@ -100,7 +100,8 @@ class WhiteboardService {
       // Set up event listeners
       this.setupEventListeners();
 
-      console.log('Successfully joined whiteboard room:', config.roomId);
+      console.log('✅ [WhiteboardService] Successfully joined whiteboard room:', config.roomId);
+      console.log('✅ [WhiteboardService] Room phase:', room.phase);
       return room;
     } catch (error) {
       console.error('Failed to join whiteboard room:', error);
