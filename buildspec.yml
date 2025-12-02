@@ -27,13 +27,11 @@ phases:
       - npm ci --prefix backend
   pre_build:
     commands:
-      - cd virtual-classroom
       - echo "Running linting and tests..."
       - npm run lint
       - npm run test:coverage
   build:
     commands:
-      - cd virtual-classroom
       - echo "Building frontend..."
       - npm run build
       - echo "Building backend..."
