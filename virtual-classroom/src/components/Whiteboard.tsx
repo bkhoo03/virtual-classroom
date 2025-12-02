@@ -68,6 +68,7 @@ export default function Whiteboard({
 
   const handleToolChange = useCallback((tool: DrawingToolType) => {
     setSelectedTool(tool);
+    // Set tool with current color and stroke width to prevent ghost tools
     whiteboardService.setTool(tool);
   }, []);
 

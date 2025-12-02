@@ -12,6 +12,10 @@ class WhiteboardService {
   private config: WhiteboardConfig | null = null;
   private onStateChangeCallback: ((state: RoomState) => void) | null = null;
   private onPhaseChangeCallback: ((phase: RoomPhase) => void) | null = null;
+  
+  // Track current state to ensure consistent updates
+  private currentColor: [number, number, number] = [0, 0, 0]; // Black
+  private currentStrokeWidth: number = 6;
 
   /**
    * Initialize the Whiteboard SDK
@@ -164,6 +168,7 @@ class WhiteboardService {
 
   /**
    * Set the current drawing tool
+   * Sets the complete member state to avoid ghost tools
    */
   setTool(toolType: DrawingToolType): void {
     if (!this.room) {
@@ -172,50 +177,47 @@ class WhiteboardService {
     }
 
     try {
+      let applianceName: string;
+      
       switch (toolType) {
         case 'pencil':
-          this.room.setMemberState({
-            currentApplianceName: 'pencil' as any,
-          });
+          applianceName = 'pencil';
           break;
         case 'rectangle':
-          this.room.setMemberState({
-            currentApplianceName: 'rectangle' as any,
-          });
+          applianceName = 'rectangle';
           break;
         case 'circle':
-          this.room.setMemberState({
-            currentApplianceName: 'ellipse' as any,
-          });
+          applianceName = 'ellipse';
           break;
         case 'line':
-          this.room.setMemberState({
-            currentApplianceName: 'straight' as any,
-          });
+          applianceName = 'straight';
           break;
         case 'text':
-          this.room.setMemberState({
-            currentApplianceName: 'text' as any,
-          });
+          applianceName = 'text';
           break;
         case 'eraser':
-          this.room.setMemberState({
-            currentApplianceName: 'eraser' as any,
-          });
+          applianceName = 'eraser';
           break;
         case 'selector':
-          this.room.setMemberState({
-            currentApplianceName: 'selector' as any,
-          });
+          applianceName = 'selector';
           break;
         case 'hand':
-          this.room.setMemberState({
-            currentApplianceName: 'hand' as any,
-          });
+          applianceName = 'hand';
           break;
         default:
           console.warn('Unknown tool type:', toolType);
+          return;
       }
+      
+      // Set complete member state including current color and stroke width
+      // This prevents ghost tools from appearing
+      this.room.setMemberState({
+        currentApplianceName: applianceName as any,
+        strokeColor: this.currentColor,
+        strokeWidth: this.currentStrokeWidth,
+      });
+      
+      console.log('Tool changed to:', applianceName, 'with color:', this.currentColor, 'width:', this.currentStrokeWidth);
     } catch (error) {
       console.error('Error setting tool:', error);
     }
@@ -234,9 +236,15 @@ class WhiteboardService {
       // Convert hex color to RGB array [r, g, b]
       const rgb = this.hexToRgb(color);
       if (rgb) {
+        // Store the current color
+        this.currentColor = rgb;
+        
+        // Update the member state
         this.room.setMemberState({
           strokeColor: rgb,
         });
+        
+        console.log('Color changed to:', color, 'RGB:', rgb);
       }
     } catch (error) {
       console.error('Error setting color:', error);
@@ -253,9 +261,15 @@ class WhiteboardService {
     }
 
     try {
+      // Store the current stroke width
+      this.currentStrokeWidth = width;
+      
+      // Update the member state
       this.room.setMemberState({
         strokeWidth: width,
       });
+      
+      console.log('Stroke width changed to:', width);
     } catch (error) {
       console.error('Error setting stroke width:', error);
     }
