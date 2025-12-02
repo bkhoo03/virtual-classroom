@@ -153,12 +153,7 @@ describe('API Endpoint Validation Property Tests', () => {
     }
   });
 
-  it('Property 1: Health endpoint returns valid response structure', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 1: Health endpoint returns valid response structure', async () => {
     await fc.assert(
       fc.asyncProperty(fc.constant(null), async () => {
         const endpoint = API_ENDPOINTS.find(e => e.path === '/health')!;
@@ -179,12 +174,7 @@ describe('API Endpoint Validation Property Tests', () => {
     );
   });
 
-  it('Property 1: Login endpoint validates request payload and returns expected structure', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 1: Login endpoint validates request payload and returns expected structure', async () => {
     await fc.assert(
       fc.asyncProperty(emailArbitrary, passwordArbitrary, async (email, password) => {
         const endpoint = API_ENDPOINTS.find(e => e.path === '/api/auth/login')!;
@@ -295,12 +285,7 @@ describe('API Endpoint Validation Property Tests', () => {
     );
   });
 
-  it('Property 1: Endpoints reject requests with missing required fields', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 1: Endpoints reject requests with missing required fields', async () => {
     await fc.assert(
       fc.asyncProperty(fc.constant(null), async () => {
         // Test login endpoint with missing fields

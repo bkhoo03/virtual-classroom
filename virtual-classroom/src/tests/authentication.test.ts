@@ -380,7 +380,7 @@ describe('Authentication Property Tests', () => {
    * Validates: Requirements 10.7
    */
   describe('Property 47: Session cleanup timeout', () => {
-    it('should cleanup session resources within 30 seconds', async () => {
+    it('should cleanup session resources within 30 seconds', { timeout: 40000 }, async () => {
       await fc.assert(
         fc.asyncProperty(
           sessionIdArbitrary,

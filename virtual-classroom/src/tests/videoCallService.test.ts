@@ -16,21 +16,28 @@ import type { VideoCallConfig } from '../types/video.types';
  */
 
 // Create mock instances
-const createMockClient = () => ({
-  connectionState: 'DISCONNECTED',
-  remoteUsers: [],
-  join: vi.fn().mockResolvedValue(undefined),
-  leave: vi.fn().mockResolvedValue(undefined),
-  publish: vi.fn().mockResolvedValue(undefined),
-  subscribe: vi.fn().mockResolvedValue(undefined),
-  unsubscribe: vi.fn().mockResolvedValue(undefined),
-  on: vi.fn(),
-  removeAllListeners: vi.fn(),
-  getRTCStats: vi.fn().mockReturnValue({
-    RecvBitrate: 500,
-    SendBitrate: 500
-  })
-});
+const createMockClient = () => {
+  const mockClient: any = {
+    connectionState: 'DISCONNECTED',
+    remoteUsers: [],
+    join: vi.fn().mockImplementation(async () => {
+      mockClient.connectionState = 'CONNECTED';
+    }),
+    leave: vi.fn().mockImplementation(async () => {
+      mockClient.connectionState = 'DISCONNECTED';
+    }),
+    publish: vi.fn().mockResolvedValue(undefined),
+    subscribe: vi.fn().mockResolvedValue(undefined),
+    unsubscribe: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
+    getRTCStats: vi.fn().mockReturnValue({
+      RecvBitrate: 500,
+      SendBitrate: 500
+    })
+  };
+  return mockClient;
+};
 
 const createMockAudioTrack = () => ({
   enabled: true,

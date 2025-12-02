@@ -326,7 +326,7 @@ class PresentationModeManager {
    * Reset to initial state
    */
   reset(): void {
-    this.currentMode = 'pdf';
+    this.currentMode = 'ai-output';
     this.previousMode = null;
     this.initializeDefaultStates();
     this.notifyModeChange(this.currentMode);

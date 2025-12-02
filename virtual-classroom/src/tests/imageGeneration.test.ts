@@ -3,13 +3,14 @@
  * Tests DALL-E integration, compression, timeout handling, and cost tracking
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import * as fc from 'fast-check';
 import ImageGenerationService from '../services/ImageGenerationService';
 import type { ImageRequest, GeneratedImage } from '../types/ai.types';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
+const originalFetch = global.fetch;
 global.fetch = mockFetch;
 
 // Mock Image and Canvas for compression tests
@@ -56,6 +57,11 @@ global.document = {
   },
 } as any;
 
+// Mock URL.createObjectURL
+global.URL.createObjectURL = vi.fn((blob: Blob) => {
+  return `blob:mock-compressed-image-${Math.random()}`;
+});
+
 // Custom arbitraries for image generation
 const imagePromptArbitrary = fc.string({ minLength: 3, maxLength: 200 });
 const imageSizeArbitrary = fc.constantFrom('256x256', '512x512', '1024x1024');
@@ -77,9 +83,19 @@ describe('ImageGenerationService Property Tests', () => {
     });
   });
 
+  beforeEach(() => {
+    // Re-assign mock fetch for each test
+    global.fetch = mockFetch;
+  });
+
   afterEach(() => {
     service.clearCache();
     service.resetUsageStats();
+  });
+
+  afterAll(() => {
+    // Restore original fetch after all tests
+    global.fetch = originalFetch;
   });
 
   /**

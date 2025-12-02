@@ -56,12 +56,7 @@ describe('API Routing Property Tests', () => {
     }
   });
 
-  it('Property 61: API requests are routed to the configured backend URL', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 61: API requests are routed to the configured backend URL', async () => {
     await fc.assert(
       fc.asyncProperty(endpointArbitrary, async (endpoint) => {
         // Construct the full URL using the backend URL
@@ -109,12 +104,7 @@ describe('API Routing Property Tests', () => {
     expect(BACKEND_URL).not.toMatch(/\/$/);
   });
 
-  it('Property 61: CORS origin validation accepts valid origins', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 61: CORS origin validation accepts valid origins', async () => {
     await fc.assert(
       fc.asyncProperty(originArbitrary, async (origin) => {
         // Test CORS preflight request
@@ -182,12 +172,7 @@ describe('API Routing Property Tests', () => {
     );
   });
 
-  it('Property 61: Credentials are included in cross-origin requests', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 61: Credentials are included in cross-origin requests', async () => {
     await fc.assert(
       fc.asyncProperty(fc.constant('/health'), async (endpoint) => {
         // Make request with credentials
@@ -209,12 +194,7 @@ describe('API Routing Property Tests', () => {
     );
   });
 
-  it('Property 61: Invalid origins are rejected by CORS', async () => {
-    if (!backendAvailable) {
-      console.warn('Skipping test - backend not available');
-      return;
-    }
-
+  it.skipIf(!backendAvailable)('Property 61: Invalid origins are rejected by CORS', async () => {
     const invalidOrigins = [
       'http://evil.com',
       'https://malicious.site',

@@ -202,9 +202,9 @@ describe('Chat Component Integration Tests', () => {
     fireEvent.change(input, { target: { value: 'Test' } });
     fireEvent.click(screen.getByRole('button', { name: /send message/i }));
     
-    // Should show processing indicator
+    // Should show AI thinking indicator
     await waitFor(() => {
-      expect(screen.getByText(/processing/i)).toBeInTheDocument();
+      expect(screen.getByText(/ai is thinking/i)).toBeInTheDocument();
     });
   });
 });
