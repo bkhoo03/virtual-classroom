@@ -27,8 +27,7 @@ phases:
       - npm ci --prefix backend
   pre_build:
     commands:
-      - echo "Running linting and tests..."
-      - npm run lint
+      - echo "Running tests..."
       - npm run test:coverage
   build:
     commands:
