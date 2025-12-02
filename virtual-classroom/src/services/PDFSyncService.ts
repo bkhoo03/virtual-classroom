@@ -21,66 +21,77 @@ class PDFSyncService {
    * Initialize Socket.IO connection
    */
   private initializeSocket(): void {
-    // Get backend URL from environment or use default
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    // Get backend URL from environment
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
     
-    this.socket = io(backendUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-    });
+    // Only initialize if backend URL is configured
+    if (!backendUrl || backendUrl.includes('vercel.app')) {
+      console.log('📡 [PDFSync] WebSocket disabled (no backend URL or using Vercel)');
+      console.log('📡 [PDFSync] PDF viewer will work but page changes won\'t sync across users');
+      return;
+    }
+    
+    try {
+      this.socket = io(backendUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+      });
 
-    this.socket.on('connect', () => {
-      console.log('📡 [PDFSync] Connected to WebSocket server');
-      // Rejoin session if we were in one
-      if (this.currentSessionId) {
-        this.socket?.emit('join-session', this.currentSessionId);
-      }
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('📡 [PDFSync] Disconnected from WebSocket server');
-    });
-
-    this.socket.on('pdf-page-changed', ({ pdfUrl, page }: { pdfUrl: string; page: number }) => {
-      console.log('📡 [PDFSync] Received page change:', { pdfUrl, page });
-      
-      // Update local state
-      if (this.currentSessionId) {
-        const key = `${this.currentSessionId}:${pdfUrl}`;
-        this.currentPage.set(key, page);
-
-        // Notify subscribers
-        const callbacks = this.callbacks.get(this.currentSessionId);
-        if (callbacks) {
-          callbacks.forEach(callback => {
-            try {
-              callback(page, pdfUrl);
-            } catch (error) {
-              console.error('Error in PDF sync callback:', error);
-            }
-          });
+      this.socket.on('connect', () => {
+        console.log('📡 [PDFSync] Connected to WebSocket server');
+        // Rejoin session if we were in one
+        if (this.currentSessionId) {
+          this.socket?.emit('join-session', this.currentSessionId);
         }
-      }
-    });
+      });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('📡 [PDFSync] Connection error:', error);
-    });
+      this.socket.on('disconnect', () => {
+        console.log('📡 [PDFSync] Disconnected from WebSocket server');
+      });
+
+      this.socket.on('pdf-page-changed', ({ pdfUrl, page }: { pdfUrl: string; page: number }) => {
+        console.log('📡 [PDFSync] Received page change:', { pdfUrl, page });
+        
+        // Update local state
+        if (this.currentSessionId) {
+          const key = `${this.currentSessionId}:${pdfUrl}`;
+          this.currentPage.set(key, page);
+
+          // Notify subscribers
+          const callbacks = this.callbacks.get(this.currentSessionId);
+          if (callbacks) {
+            callbacks.forEach(callback => {
+              try {
+                callback(page, pdfUrl);
+              } catch (error) {
+                console.error('Error in PDF sync callback:', error);
+              }
+            });
+          }
+        }
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.warn('📡 [PDFSync] Connection error (WebSocket sync disabled):', error.message);
+      });
+    } catch (error) {
+      console.warn('📡 [PDFSync] Failed to initialize WebSocket:', error);
+    }
   }
 
   /**
    * Subscribe to PDF page changes for a specific session
    */
   subscribe(sessionId: string, callback: PDFSyncCallback): () => void {
-    // Join the session room
-    if (this.currentSessionId !== sessionId) {
+    // Join the session room (only if socket is available)
+    if (this.socket && this.currentSessionId !== sessionId) {
       if (this.currentSessionId) {
-        this.socket?.emit('leave-session', this.currentSessionId);
+        this.socket.emit('leave-session', this.currentSessionId);
       }
       this.currentSessionId = sessionId;
-      this.socket?.emit('join-session', sessionId);
+      this.socket.emit('join-session', sessionId);
       console.log('📡 [PDFSync] Joined session:', sessionId);
     }
 
@@ -109,13 +120,12 @@ class PDFSyncService {
     const key = `${sessionId}:${pdfUrl}`;
     this.currentPage.set(key, page);
 
-    // Emit page change via Socket.IO
+    // Emit page change via Socket.IO (if available)
     if (this.socket?.connected) {
       this.socket.emit('pdf-page-change', { sessionId, pdfUrl, page });
       console.log('📡 [PDFSync] Sent page change:', { sessionId, pdfUrl, page });
-    } else {
-      console.warn('📡 [PDFSync] Socket not connected, cannot sync page change');
     }
+    // Silently fail if socket not available - PDF will still work locally
   }
 
   /**
